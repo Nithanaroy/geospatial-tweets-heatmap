@@ -10,22 +10,20 @@ DB = 'tstream'
 CELLS_COLLECTION = 'tweets'
 
 import json
-import time
-import math
-import redis
-import threading
 import signal
 import sys
+from threading import Thread
+
+import redis
 from flask import Flask
-from flask import request
-from flask import abort
 from flask import url_for
-from flask import make_response
 from flask import Response
 from pymongo import Connection
 from bson import json_util
-from threading import Thread
 
+from pymongo import MongoClient
+
+import time
 
 red = redis.StrictRedis()
 
@@ -35,19 +33,31 @@ def signal_handler(signal, frame):
     sys.exit(0)
 
 
+# def tail_mongo_thread():
+# print "beginning to tail..."
+#     db = Connection().tstream
+#     coll = db.tweets_tail
+#     cursor = coll.find({"coordinates.type": "Point"}, {"coordinates": 1}, tailable=True, timeout=False)
+#     ci = 0
+#     while cursor.alive:
+#         try:
+#             doc = cursor.next()
+#             ci += 1
+#             red.publish('chat', u'%s' % json.dumps(doc, default=json_util.default))
+#         except StopIteration:
+#             pass
+
+
 def tail_mongo_thread():
-    print "beginning to tail..."
-    db = Connection().tstream
-    coll = db.tweets_tail
-    cursor = coll.find({"coordinates.type": "Point"}, {"coordinates": 1}, tailable=True, timeout=False)
-    ci = 0
-    while cursor.alive:
-        try:
-            doc = cursor.next()
-            ci += 1
-            red.publish('chat', u'%s' % json.dumps(doc, default=json_util.default))
-        except StopIteration:
-            pass
+    client = MongoClient()
+    db = client.tstream
+    collection = db.tweets_tail
+    # cursor = collection.find({"coordinates.type": "Point"}, {"coordinates": 1})
+    cursor = collection.find({})
+    for tweet in cursor:
+        # print(tweet)
+        red.publish('chat', u'%s' % json.dumps(tweet, default=json_util.default))
+        # time.sleep(0.0001)
 
 
 def event_stream():
@@ -56,7 +66,9 @@ def event_stream():
     i = 0
     for message in pubsub.listen():
         i += 1
-        print i
+        if 10000 % i == 0:
+            print i
+            time.sleep(0.5)
         yield 'data: %s\n\n' % message['data']
 
 

@@ -47,10 +47,12 @@
                     },
                     message: function (data) {
 
-                        console.log(data.coordinates.coordinates);
-                        heatmap.addDataPoint(data.coordinates.coordinates[1], data.coordinates.coordinates[0]);
 
-                    },
+                        if (data.latitude && data.longitude) {
+                            heatmap.addDataPoint(data.latitude , data.longitude);
+                        }
+
+                    }
                     // $.eventsource("close", "json-event-source");
 
 
