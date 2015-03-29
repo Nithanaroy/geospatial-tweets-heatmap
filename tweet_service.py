@@ -21,6 +21,7 @@ from flask import Response
 from flask import request
 from pymongo import Connection
 from bson import json_util
+from flask import jsonify
 
 from pymongo import MongoClient
 
@@ -74,6 +75,17 @@ def tail_mongo_thread():
         # time.sleep(0.0001)
 
 
+def fetch_records(coords):
+    client = MongoClient()
+    db = client.tstream
+    collection = db.tweets_tail
+    cursor = collection.find({"loc": {"$geoWithin": {"$box": coords}}}, {"loc": 1, "_id": 0})
+    tweets = []
+    for tweet in cursor:
+        tweets.append(json.dumps(tweet, default=json_util.default))
+    return tweets
+
+
 def event_stream():
     pubsub = red.pubsub()
     pubsub.subscribe('chat')
@@ -89,11 +101,13 @@ def event_stream():
 app = Flask(__name__)
 
 
-@app.route('/rect', methods=['GET','POST'])
+@app.route('/rect', methods=['GET', 'POST'])
 def rect():
-    print request.json
+    print request.form
     # return Response({"val": "yipppeee"}, headers={'Content-Type': 'application/json'})
-    return "Hello World!"
+    f = request.form
+    return jsonify({"tweets": fetch_records(
+        [[float(f.get("ALong")), float(f.get("ALat"))], [float(f.get("BLong")), float(f.get("BLat"))]])})
 
 
 @app.route('/tweets')
