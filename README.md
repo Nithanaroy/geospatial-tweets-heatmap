@@ -1,19 +1,14 @@
-twitter-realtime-heatmap
-========================
+Persisted GeoTagged Tweets Heatmap
+==================================
 
-A real-time Twitter heatmap as described on http://blog.comsysto.com/2012/07/10/real-time-twitter-heat-map-with-mongodb/
+Inspired from realtime tweet heatmap from https://github.com/comsysto/twitter-realtime-heatmap
 
+* Download tweets from http://www.ark.cs.cmu.edu/GeoText 
+* Tranform it into MongoDB documents using csv_mongo_json.py provided in the source code
+* Start mongodb server using `mongod --profile=2`
+* Use `mongoimport -db tsream --collection tweets_tail --type json --filename path_from_above_step` to import the above document into mongodb
+* Run `python tweet_servive.py` in terminal or command prompt
+* Hit [http://localhost:5000/static/map.html](http://localhost:5000/static/map.html) and start drawing rectangles on the map
+* Observe the generated status report on the side of the map and the heatmap
 
-To get this running you need to have a few things:
-
-
-* Twitter Streaming API credentials (which you need to enter in tstream.py)
-* MongoDB
-* a capped collection in MongoDB named "tweets_tail"
-* Flask
-* Redis
-* Tweepy
-
-
-
-First, start mongod and redis. Then start tstream.py, incoming tweets are logged to stdout. Then start tweet_service.py and connect your browser to http://localhost:5000/static/map.html and wait for the heatmap to form!
+Done!
