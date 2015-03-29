@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+<meta charset="utf-8">
 <script type="text/javascript"
-        src="https://maps.googleapis.com/maps/api/js?sensor=false&libraries=visualization"></script>
+        src="https://maps.googleapis.com/maps/api/js?v=3.exp&signed_in=false&sensor=false&libraries=visualization,drawing"></script>
 <script type="text/javascript" src="jquery-1.7.2.js"></script>
 <script type="text/javascript" src="jquery.eventsource.js"></script>
 <script type="text/javascript" src="heatmap.js"></script>
@@ -18,12 +20,10 @@
     function initialize() {
         var config = {
             "radius": 30,
-            "element": "map_canvas",
             "visible": true,
-            "opacity": 40,
+            "opacity": 60,
             "gradient": { 0.45: "rgb(0,0,255)", 0.55: "rgb(0,255,255)", 0.65: "rgb(0,255,0)", 0.95: "yellow", 1.0: "rgb(255,0,0)" }
         };
-
 
         var myOptions = {
             zoom: 2,
@@ -31,10 +31,25 @@
             mapTypeId: google.maps.MapTypeId.ROADMAP};
 
         map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
-        heatmap = new HeatmapOverlay(map, {"radius": 30, "visible": true, "opacity": 60, "gradient": { 0.45: "rgb(0,0,255)", 0.55: "rgb(0,255,255)", 0.65: "rgb(0,255,0)", 0.95: "yellow", 1.0: "rgb(255,0,0)" }});
+        heatmap = new HeatmapOverlay(map, config);
         google.maps.event.addListener(map, "idle", function () {
             //heatmap.setDataSet(testData);
         });
+
+        /*
+         google.maps.event.addListener(map, 'click', function (event) {
+         placeMarker(event.latLng);
+         });
+
+         function placeMarker(location) {
+         var marker = new google.maps.Marker({
+         position: location,
+         map: map
+         });
+
+         map.setCenter(location);
+         }
+         */
 
         $.eventsource({
                     label: "json-event-source",
@@ -48,8 +63,12 @@
                     message: function (data) {
 
 
-                        if (data.latitude && data.longitude) {
-                            heatmap.addDataPoint(data.latitude , data.longitude);
+                        /*if (data.latitude && data.longitude) {
+                         heatmap.addDataPoint(data.latitude , data.longitude);
+                         }*/
+
+                        if (data.loc) {
+                            heatmap.addDataPoint(data.loc[1], data.loc[0]);
                         }
 
                     }
@@ -58,6 +77,66 @@
 
                 }
         )
+
+
+        var drawingManager = new google.maps.drawing.DrawingManager({
+            drawingMode: google.maps.drawing.OverlayType.MARKER,
+            drawingControl: true,
+            drawingControlOptions: {
+                position: google.maps.ControlPosition.TOP_CENTER,
+                drawingModes: [
+                    google.maps.drawing.OverlayType.MARKER,
+                    google.maps.drawing.OverlayType.CIRCLE,
+                    google.maps.drawing.OverlayType.POLYGON,
+                    google.maps.drawing.OverlayType.POLYLINE,
+                    google.maps.drawing.OverlayType.RECTANGLE
+                ]
+            },
+            markerOptions: {
+                icon: 'images/beachflag.png'
+            },
+            /*rectangleOptions: {
+             editable: true,
+             draggable: true
+             },*/
+            circleOptions: {
+                fillColor: '#ffff00',
+                fillOpacity: 1,
+                strokeWeight: 5,
+                clickable: false,
+                editable: true,
+                zIndex: 1
+            }
+        });
+        drawingManager.setMap(map);
+        google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
+            var bounds = rectangle.getBounds();
+            console.log("A : [long: " + bounds.va.j + ", lat: " + bounds.Da.j + "], B: [long: " + bounds.va.k + ", lat: " + bounds.Da.k + "]")
+            var data = { coords: [
+                [bounds.va.j, bounds.Da.j],
+                [bounds.va.k, bounds.Da.k]
+            ]};
+            $.ajax({
+                url: "http://localhost:5000/rect",
+                method: "POST",
+                dataType: "json",
+                data: data,
+                success: function (data) {
+                    console.log("success", data);
+                },
+                error: function (err) {
+                    console.log("error", err);
+                }
+            })
+        });
+
+        /*
+         google.maps.event.addListener(drawingManager, 'overlaycomplete', function (event) {
+         if (event.type == google.maps.drawing.OverlayType.CIRCLE) {
+         var radius = event.overlay.getRadius();
+         }
+         });
+         */
     }
     ;
 
@@ -68,10 +147,10 @@
 <body onload="initialize()">
 <div id="result"></div>
 <div id="map_canvas" style="height: 600px; width: 800px;"></div>
-<button onclick="toggleHeatmap()">Toggle Heatmap</button>
+<!-- <button onclick="toggleHeatmap()">Toggle Heatmap</button>
 <button onclick="changeGradient()">Change gradient</button>
 <button onclick="changeRadius()">Change radius</button>
-<button onclick="changeOpacity()">Change opacity</button>
+<button onclick="changeOpacity()">Change opacity</button> -->
 </body>
 </body>
 </html>
