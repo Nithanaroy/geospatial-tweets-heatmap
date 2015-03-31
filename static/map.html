@@ -11,131 +11,229 @@
 
 
 <script type="text/javascript">
-    var map, pointarray, heatmap;
-    var taxiData = [
-        new google.maps.LatLng(37.782551, -122.445368)
-    ];
+var map, pointarray, heatmap;
+var taxiData = [
+    new google.maps.LatLng(37.782551, -122.445368)
+];
 
 
-    function initialize() {
-        var config = {
-            "radius": 30,
-            "visible": true,
-            "opacity": 60,
-            "gradient": { 0.45: "rgb(0,0,255)", 0.55: "rgb(0,255,255)", 0.65: "rgb(0,255,0)", 0.95: "yellow", 1.0: "rgb(255,0,0)" }
-        };
+function initialize() {
+    var config = {
+        "radius": 30,
+        "visible": true,
+        "opacity": 60,
+        "gradient": { 0.45: "rgb(0,0,255)", 0.55: "rgb(0,255,255)", 0.65: "rgb(0,255,0)", 0.95: "yellow", 1.0: "rgb(255,0,0)" }
+    };
 
-        var myOptions = {
-            zoom: 5,
-            center: new google.maps.LatLng(37.774546, -122.433523),
-            mapTypeId: google.maps.MapTypeId.ROADMAP};
+    var myOptions = {
+        zoom: 5,
+        center: new google.maps.LatLng(37.774546, -122.433523),
+        mapTypeId: google.maps.MapTypeId.ROADMAP};
 
-        map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
-        heatmap = new HeatmapOverlay(map, config);
-        google.maps.event.addListener(map, "idle", function () {
-            //heatmap.setDataSet(testData);
-        });
+    map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+    heatmap = new HeatmapOverlay(map, config);
+    google.maps.event.addListener(map, "idle", function () {
+        //heatmap.setDataSet(testData);
+    });
 
-        /*
-         google.maps.event.addListener(map, 'click', function (event) {
-         placeMarker(event.latLng);
-         });
+    /*
+     google.maps.event.addListener(map, 'click', function (event) {
+     placeMarker(event.latLng);
+     });
 
-         function placeMarker(location) {
-         var marker = new google.maps.Marker({
-         position: location,
-         map: map
-         });
+     function placeMarker(location) {
+     var marker = new google.maps.Marker({
+     position: location,
+     map: map
+     });
 
-         map.setCenter(location);
-         }
-         */
+     map.setCenter(location);
+     }
+     */
 
-        var drawingManager = new google.maps.drawing.DrawingManager({
-            drawingMode: google.maps.drawing.OverlayType.MARKER,
-            drawingControl: true,
-            drawingControlOptions: {
-                position: google.maps.ControlPosition.TOP_CENTER,
-                drawingModes: [
-                    /*google.maps.drawing.OverlayType.MARKER,
-                     google.maps.drawing.OverlayType.CIRCLE,
-                     google.maps.drawing.OverlayType.POLYGON,
-                     google.maps.drawing.OverlayType.POLYLINE,*/
-                    google.maps.drawing.OverlayType.RECTANGLE
-                ]
-            },
-            markerOptions: {
-                icon: 'images/beachflag.png'
-            },
-            /*rectangleOptions: {
-             editable: true,
-             draggable: true
-             },*/
-            circleOptions: {
-                fillColor: '#ffff00',
-                fillOpacity: 1,
-                strokeWeight: 5,
-                clickable: false,
-                editable: true,
-                zIndex: 1
-            }
-        });
-        drawingManager.setMap(map);
+    var drawingManager = new google.maps.drawing.DrawingManager({
+        drawingMode: google.maps.drawing.OverlayType.MARKER,
+        drawingControl: true,
+        drawingControlOptions: {
+            position: google.maps.ControlPosition.TOP_CENTER,
+            drawingModes: [
+                /*google.maps.drawing.OverlayType.MARKER,
+                 google.maps.drawing.OverlayType.CIRCLE,
+                 google.maps.drawing.OverlayType.POLYGON,
+                 google.maps.drawing.OverlayType.POLYLINE,*/
+                google.maps.drawing.OverlayType.RECTANGLE
+            ]
+        },
+        markerOptions: {
+            icon: 'images/beachflag.png'
+        },
+        rectangleOptions: {
+            editable: true,
+            draggable: true
+        },
+        circleOptions: {
+            fillColor: '#ffff00',
+            fillOpacity: 1,
+            strokeWeight: 5,
+            clickable: false,
+            editable: true,
+            zIndex: 1
+        }
+    });
+    drawingManager.setMap(map);
 
-        var busy = 3;  // Three parallel reqs can be made
-        google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
-            if (busy === 0)
-                Log("Busy in serving previous request(s). Try once they are complete", true);
+    var busy = false;
 
-            busy -= 1;
-            var bounds = rectangle.getBounds();
+    var queryWindow = null, qwNe = null, qwSw = null, isBeignDragged = false;
+    google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
 
-            var logStr = "A : [long: " + bounds.va.j + ", lat: " + bounds.Da.j + "], B: [long: " + bounds.va.k + ", lat: " + bounds.Da.k + "]";
-            Log("Generating heatmap for: " + logStr);
-            console.log(logStr)
-
-            var data = { ALong: bounds.va.j, ALat: bounds.Da.j, BLong: bounds.va.k, BLat: bounds.Da.k}
-
-            $.ajax({
-                url: "http://localhost:5000/rect",
-                type: "POST",
-                dataType: "json",
-                data: data,
-                success: function (data) {
-                    for (var i = 0; i < data.tweets.length; i++) {
-                        var tweet = JSON.parse(data.tweets[i]);
-                        heatmap.addDataPoint(tweet.loc[1], tweet.loc[0]);
-                    }
-                    console.log("success", data);
-                    Log('Heatmap complete. Found ' + data.tweets.length + " tweets in this area!", true)
-                    rectangle.setMap(null);
-                },
-                error: function (err) {
-                    console.log("error", err);
-                    Log("Something went wrong in fetching data.", true)
-                },
-                complete: function () {
-                    busy += 1;
-                }
-            })
-        });
-
-        function Log(message, newLine) {
-            if (newLine)
-                $("#result").append($("<p />").addClass("log mbottom25").html(message));
-            else
-                $("#result").append($("<p />").addClass("log").html(message));
+        if (busy) {
+            handleBusyState(rectangle);
+            return;
         }
 
-        /*
-         google.maps.event.addListener(drawingManager, 'overlaycomplete', function (event) {
-         if (event.type == google.maps.drawing.OverlayType.CIRCLE) {
-         var radius = event.overlay.getRadius();
-         }
-         });
-         */
+        if (queryWindow) {
+            // remove exitsing rectangles if any
+            queryWindow.setMap(null);
+        }
+        queryWindow = rectangle;
+        qwNe = queryWindow.getBounds().getNorthEast();
+        qwSw = queryWindow.getBounds().getSouthWest();
+
+        var bounds = getQueryWindowBounds(rectangle);
+        generateHeatmap(bounds);
+
+        google.maps.event.addListener(rectangle, 'dragstart', function () {
+            isBeignDragged = true;
+        });
+        google.maps.event.addListener(rectangle, 'dragend', handleQueryWindowDrag);
+        google.maps.event.addListener(rectangle, 'bounds_changed', handleQueryWindowResize);
+
+    });
+
+    function getQueryWindowBounds(rectangle) {
+        var bounds = rectangle.getBounds();
+
+        var logStr = "A : [long: " + bounds.va.j + ", lat: " + bounds.Da.j + "], B: [long: " + bounds.va.k + ", lat: " + bounds.Da.k + "]";
+        Log("Generating heatmap for: " + logStr);
+        console.log(logStr)
+
+        var data = { ALong: bounds.va.j, ALat: bounds.Da.j, BLong: bounds.va.k, BLat: bounds.Da.k}
+        return data;
     }
-    ;
+
+    function handleQueryWindowDrag(event) {
+        isBeignDragged = false;
+        handleQueryWindowChange(event);
+    }
+
+    function handleQueryWindowResize(event) {
+        /*if (queryWindow == null)
+         return; // query window doesnt exist
+
+         if (busy) {
+         handleBusyState(queryWindow);
+         return;
+         }
+
+         var ne = queryWindow.getBounds().getNorthEast();
+         var sw = queryWindow.getBounds().getSouthWest();
+
+         if (!compareCoordinates(ne, qwNe) && !compareCoordinates(sw, qwSw)) {
+         // Drag event
+         qwNe = ne;
+         qwSw = sw;
+         return; // let the drag event handler take care
+         }*/
+        if (!isBeignDragged)
+            handleQueryWindowChange(event);
+    }
+
+    function handleQueryWindowChange(event) {
+
+        if (queryWindow == null)
+            return; // query window doesnt exist
+
+        if (busy) {
+            handleBusyState(queryWindow);
+            return;
+        }
+
+        var ne = queryWindow.getBounds().getNorthEast();
+        var sw = queryWindow.getBounds().getSouthWest();
+
+
+        var contentString = 'Query window changed: ' +
+                'New north-east corner: ' + ne.lat() + ', ' + ne.lng() + '<br>' +
+                'New south-west corner: ' + sw.lat() + ', ' + sw.lng();
+        Log(contentString);
+
+        var data = { ALong: sw.lng(), ALat: sw.lat(), BLong: ne.lng(), BLat: ne.lat()};
+        generateHeatmap(data);
+    }
+
+    function generateHeatmap(data) {
+        busy = true;
+        $.ajax({
+                    url: "http://localhost:5000/rect",
+                    type: "POST",
+                    dataType: "json",
+                    data: data,
+                    success: function (data) {
+                        // var dataSet = [];
+                        heatmap.setDataSet({ max: -1, data: [] });
+                        for (var i = 0; i < data.tweets.length; i++) {
+                            var tweet = JSON.parse(data.tweets[i]);
+                            heatmap.addDataPoint(tweet.loc[1], tweet.loc[0]);
+                            // dataSet.push([tweet.loc[1], tweet.loc[0]]);
+                        }
+                        // heatmap.setDataSet(dataSet);
+                        console.log("success", data);
+                        Log('Heatmap complete. Found ' + data.tweets.length + " tweets in this area!", true)
+
+                        // remove the rectangle
+                        // rectangle.setMap(null);
+                    },
+                    error: function (err) {
+                        console.log("error", err);
+                        Log("Something went wrong in fetching data.", true, true);
+                    },
+                    complete: function () {
+                        busy = false;
+                    }
+                }
+        )
+    }
+
+    function compareCoordinates(a, b) {
+        // Assume their keys to be D and k
+        return a.D === b.D && a.k === b.k;
+    }
+
+    function handleBusyState(rectangle) {
+        Log("Busy serving another request. Please wait till its complete", true, true);
+        rectangle.setMap(null);
+    }
+
+    function Log(message, spaceBelow, spaceAbove) {
+        var cssClasses = ["log"];
+        if (spaceBelow) cssClasses.push("mbottom25");
+        if (spaceAbove) cssClasses.push("top25");
+
+        $("#result").append($("<p />").addClass(cssClasses.join(" ")).html(message));
+    }
+
+    /*
+     google.maps.event.addListener(drawingManager, 'overlaycomplete', function (event) {
+     if (event.type == google.maps.drawing.OverlayType.CIRCLE) {
+     var radius = event.overlay.getRadius();
+     }
+     });
+     */
+
+
+}
+;
 
 
 </script>
@@ -152,6 +250,10 @@
 
     .mbottom25 {
         margin-bottom: 25px;
+    }
+
+    .top25 {
+        margin-top: 25px;
     }
 </style>
 
