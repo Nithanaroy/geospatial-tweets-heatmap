@@ -10,6 +10,12 @@
 <script type="text/javascript" src="heatmap.js"></script>
 <script type="text/javascript" src="heatmap-gmaps.js"></script>
 <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
+
+<!-- file upload-->
+<script src="file_upload/js/vendor/jquery.ui.widget.js"></script>
+<script src="file_upload/js/jquery.iframe-transport.js"></script>
+<script src="file_upload/js/jquery.fileupload.js"></script>
 
 <link rel="shortcut icon" href="twitter.ico">
 <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" rel="stylesheet">
@@ -30,12 +36,14 @@ function initialize() {
     var myOptions = {
         zoom: 5,
         center: new google.maps.LatLng(37.774546, -122.433523),
-        mapTypeId: google.maps.MapTypeId.ROADMAP};
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        disableDoubleClickZoom: true // This event is used to remove a rectangle / query window
+    };
 
     map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
     heatmap = new HeatmapOverlay(map, config);
-    google.maps.event.addListener(map, "idle", function () {
-        //heatmap.setDataSet(testData);
+    google.maps.event.addListener(map, 'dblclick', function (event) {
+        event.stop();
     });
 
     /*
@@ -86,7 +94,6 @@ function initialize() {
 
     var busy = false;
 
-    var queryWindow = null, qwNe = null, qwSw = null, isBeignDragged = false;
     google.maps.event.addListener(drawingManager, 'rectanglecomplete', function (rectangle) {
 
         if (busy) {
@@ -94,19 +101,13 @@ function initialize() {
             return;
         }
 
-        if (queryWindow) {
-            // remove exitsing rectangles if any
-            // queryWindow.setMap(null);
-        }
-        queryWindow = rectangle;
-        qwNe = queryWindow.getBounds().getNorthEast();
-        qwSw = queryWindow.getBounds().getSouthWest();
+        rectangle.isBeingDragged = false; // our custom property which is true when it is being dragged
 
         var bounds = getQueryWindowBounds(rectangle);
         generateHeatmap(bounds);
 
         google.maps.event.addListener(rectangle, 'dragstart', function () {
-            isBeignDragged = true;
+            rectangle.isBeignDragged = true;
         });
         google.maps.event.addListener(rectangle, 'dragend', handleQueryWindowDrag);
         google.maps.event.addListener(rectangle, 'bounds_changed', handleQueryWindowResize);
@@ -125,43 +126,22 @@ function initialize() {
         return data;
     }
 
-    function handleDoubleCilck(event) {
-        console.log(
-                "Double Clicked"
-        );
+    function handleDoubleClick(event) {
+        // remove the rectangle
+        this.setMap(null);
     }
 
     function handleQueryWindowDrag(event) {
-        isBeignDragged = false;
+        this.isBeignDragged = false;
         handleQueryWindowChange(this);
     }
 
     function handleQueryWindowResize(event) {
-        /*if (queryWindow == null)
-         return; // query window doesnt exist
-
-         if (busy) {
-         handleBusyState(queryWindow);
-         return;
-         }
-
-         var ne = queryWindow.getBounds().getNorthEast();
-         var sw = queryWindow.getBounds().getSouthWest();
-
-         if (!compareCoordinates(ne, qwNe) && !compareCoordinates(sw, qwSw)) {
-         // Drag event
-         qwNe = ne;
-         qwSw = sw;
-         return; // let the drag event handler take care
-         }*/
-        if (!isBeignDragged)
+        if (!this.isBeignDragged)
             handleQueryWindowChange(this);
     }
 
     function handleQueryWindowChange(rectangle) {
-
-        if (queryWindow == null)
-            return; // query window doesnt exist
 
         if (busy) {
             handleBusyState(rectangle);
@@ -214,26 +194,16 @@ function initialize() {
         )
     }
 
-    function compareCoordinates(a, b) {
-        // Assume their keys to be D and k
-        return a.D === b.D && a.k === b.k;
-    }
-
     function handleBusyState(rectangle) {
         Log("Busy serving another request. Please wait till its complete", true, true);
-        rectangle.setMap(null);
+        // rectangle.setMap(null); // Remove the rectangle
     }
 
-    function Log(message, spaceBelow, spaceAbove) {
-        var cssClasses = ["log"];
-        if (spaceBelow) cssClasses.push("mbottom25");
-        if (spaceAbove) cssClasses.push("top25");
-
-        $("#result").prepend($("<p />").addClass(cssClasses.join(" ")).html(message));
-    }
 
     /*
      google.maps.event.addListener(drawingManager, 'overlaycomplete', function (event) {
+     // Switch back to non-drawing mode after drawing a shape.
+     drawingManager.setDrawingMode(null);
      if (event.type == google.maps.drawing.OverlayType.CIRCLE) {
      var radius = event.overlay.getRadius();
      }
@@ -243,9 +213,38 @@ function initialize() {
 
 }
 
+function Log(message, spaceBelow, spaceAbove) {
+    var cssClasses = ["log"];
+    if (spaceBelow) cssClasses.push("mbottom25");
+    if (spaceAbove) cssClasses.push("top25");
+
+    $("#result").prepend($("<p />").addClass(cssClasses.join(" ")).html(message));
+}
+
 $(function () {
 
-    showPanel();
+    // settings
+    if (Modernizr.localstorage) {
+        if (!window.localStorage.getItem("noreadme"))
+            $('#instructions_modal').modal();
+        if (window.localStorage.getItem("showpanel") === "true")
+            showPanel();
+        else
+            hidePanel();
+    } else {
+        // cant support settings. Default settings
+        showPanel();
+    }
+
+    $("#clear_storage").on("click", function () {
+        if (Modernizr.localstorage)
+            window.localStorage.clear();
+    });
+
+    $("#dontshowbtn").on('click', function () {
+        window.localStorage.setItem("noreadme", true);
+        $('#instructions_modal').modal('hide')
+    });
 
     $(".btn").on("click", function () {
         var id = $(this).attr("id");
@@ -257,16 +256,48 @@ $(function () {
         }
     });
 
+    $('#fileupload').fileupload({
+        dataType: 'json',
+        add: function (e, data) {
+            data.context = $("#uploadSubmitBtn")
+                    .click(function () {
+                        /*data.context = $('<p/>').text('Uploading...').replaceAll($(this));*/
+                        $(this).attr('disabled', true);
+                        data.submit();
+                    });
+        },
+        done: function (e, data) {
+            $.each(data.result.files, function (index, file) {
+                Log("Uploaded file " + file.name, true, true);
+            });
+            window.setTimeout(function () {
+                updateProgressbar(0);
+            }, 1000);
+            /*data.context.text('Upload finished.');*/
+            $("#uploadSubmitBtn").attr('disabled', false);
+        },
+        progressall: function (e, data) {
+            var progress = parseInt(data.loaded / data.total * 100, 10);
+            updateProgressbar(progress);
+        }
+    });
+
+    function updateProgressbar(progress) {
+        $('.progress .progress-bar').css('width', progress + '%').text(progress + "%");
+    }
+
     function hidePanel() {
         $("#log_container").animate({left: -400}, 200, "swing");
         $("#right").show();
         $("#left").hide();
+        window.localStorage.setItem("showpanel", false);
     }
 
     function showPanel() {
         $("#log_container").animate({left: 0}, 200, "swing");
         $("#right").hide();
         $("#left").show();
+        window.localStorage.setItem("showpanel", true);
     }
 });
 
@@ -289,6 +320,10 @@ $(function () {
     .top25 {
         margin-top: 25px;
     }
+
+    .margin15 {
+        margin: 15px;
+    }
 </style>
 
 <body onload="initialize()">
@@ -302,9 +337,43 @@ $(function () {
     <div id="log_container" style="width: 452px; position: absolute; left: 0; top: 0;">
         <div style="width: 400px; height: 600px; overflow-y: scroll; background: #FFF;"
              class="pull-left">
-            <h2 class="text-center">Updates</h2>
+
+            <a href="javascript:void(0)" id="clear_storage" class="pull-right margin15">Clear Settings</a>
+
+            <div class="clearfix"></div>
+
+            <!-- file upload -->
+            <div class="panel panel-default margin15">
+                <div class="panel-heading" data-toggle="collapse" data-target="#collapseExample" aria-expanded="true"
+                     aria-controls="collapseExample" style="cursor: pointer">
+                    <h3 class="panel-title">Add new data</h3>
+                </div>
+                <div class="panel-body collapse" id="collapseExample">
+                    <form action="/upload" method=post enctype=multipart/form-data>
+                        <div class="form-group">
+                            <input id="fileupload" type="file" name="file" data-url="/upload">
+
+                            <br>
+
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0"
+                                     aria-valuemax="100" style="width: 0%;">
+
+                                </div>
+                            </div>
+                            <!-- <input type="file" id="file" name="file"> -->
+
+                            <p class="help-block">Choose a .csv file with format:
+                                longitude,latitude,any_other_data_you_want</p>
+                        </div>
+                        <button type="submit" id="uploadSubmitBtn" class="btn btn-default">Upload & Insert</button>
+                    </form>
+                </div>
+            </div>
+
+            <h4 class="text-center top25">Updates</h4>
             <hr/>
-            <div id="result"></div>
+            <div id="result" class="margin15"></div>
         </div>
         <button id="left" type="button" class="btn btn-default btn-lg pull-right">
             <span class="glyphicon glyphicon-menu-left" aria-hidden="true"></span>
@@ -319,6 +388,37 @@ $(function () {
 <button onclick="changeGradient()">Change gradient</button>
 <button onclick="changeRadius()">Change radius</button>
 <button onclick="changeOpacity()">Change opacity</button> -->
-</body>
+
+<div class="modal fade" id="instructions_modal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
+                        aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">README</h4>
+            </div>
+            <div class="modal-body">
+                <p>You can generate heatmap for a particular area based on the density of tweets in that area using this
+                    interactive tool.</p>
+                <br>
+                <ul>
+                    <li>Use the Rectangle draw tool to mark a query window on the map</li>
+                    <li>Double click removes the query window</li>
+                    <li>Drag and re-size the query window(s)</li>
+                    <li>Watch for the logs in the updates panel to your left. You can hide it.</li>
+                </ul>
+                <br>
+
+                <p>Complete Source Code: <a href="https://github.com/Nithanaroy/geospatial-tweets-heatmap"
+                                            target="_blank">https://github.com/Nithanaroy/geospatial-tweets-heatmap</a>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="dontshowbtn">Do not show again!</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

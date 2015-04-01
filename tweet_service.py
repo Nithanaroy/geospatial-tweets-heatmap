@@ -10,22 +10,23 @@ DB = 'tstream'
 CELLS_COLLECTION = 'tweets'
 
 import json
-import signal
 import sys
 from threading import Thread
 
 import redis
-from flask import Flask
-from flask import url_for
-from flask import Response
-from flask import request
-from pymongo import Connection
 from bson import json_util
 from flask import jsonify
 
 from pymongo import MongoClient
 
-import time
+import os
+from flask import Flask, request, redirect, url_for
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = set(['csv', 'txt'])
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 red = redis.StrictRedis()
 
@@ -110,15 +111,31 @@ def rect():
         [[float(f.get("ALong")), float(f.get("ALat"))], [float(f.get("BLong")), float(f.get("BLat"))]])})
 
 
-@app.route('/tweets')
-def tweets():
-    url_for('static', filename='map.html')
-    url_for('static', filename='jquery-1.7.2.min.js')
-    url_for('static', filename='jquery.eventsource.js')
-    url_for('static', filename='jquery-1.11.2.min.js')
-    url_for('static', filename='twitter.ico')
-    # return Response(event_stream(), headers={'Content-Type': 'text/event-stream'})
-    return "Hello World!"
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
+
+
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    if request.method == 'POST':
+        file = request.files['file']
+        if file and allowed_file(file.filename):
+            # filename = secure_filename(file.filename)
+            filename = file.filename
+            file.save(os.path.join(os.path.dirname(os.path.realpath(__file__)), UPLOAD_FOLDER, filename))
+            return jsonify({"files": [{"name": filename}]})
+
+
+# @app.route('/tweets')
+# def tweets():
+# url_for('static', filename='map.html')
+# url_for('static', filename='jquery-1.7.2.min.js')
+# url_for('static', filename='jquery.eventsource.js')
+# url_for('static', filename='jquery-1.11.2.min.js')
+#     url_for('static', filename='twitter.ico')
+#     # return Response(event_stream(), headers={'Content-Type': 'text/event-stream'})
+#     return "Hello World!"
 
 
 def runThread():
