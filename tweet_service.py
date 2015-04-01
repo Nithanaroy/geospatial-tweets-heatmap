@@ -115,7 +115,8 @@ def tweets():
     url_for('static', filename='map.html')
     url_for('static', filename='jquery-1.7.2.min.js')
     url_for('static', filename='jquery.eventsource.js')
-    url_for('static', filename='jquery-1.7.2.js')
+    url_for('static', filename='jquery-1.11.2.min.js')
+    url_for('static', filename='twitter.ico')
     # return Response(event_stream(), headers={'Content-Type': 'text/event-stream'})
     return "Hello World!"
 

@@ -2,20 +2,22 @@
 <html>
 <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
 <meta charset="utf-8">
+<title>Persistent Twitter Heatmap</title>
 <script type="text/javascript"
         src="https://maps.googleapis.com/maps/api/js?v=3.exp&signed_in=false&sensor=false&libraries=visualization,drawing"></script>
-<script type="text/javascript" src="jquery-1.7.2.js"></script>
+<script type="text/javascript" src="jquery-1.11.2.min.js"></script>
 <script type="text/javascript" src="jquery.eventsource.js"></script>
 <script type="text/javascript" src="heatmap.js"></script>
 <script type="text/javascript" src="heatmap-gmaps.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+
+<link rel="shortcut icon" href="twitter.ico">
+<link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" rel="stylesheet">
 
 
 <script type="text/javascript">
-var map, pointarray, heatmap;
-var taxiData = [
-    new google.maps.LatLng(37.782551, -122.445368)
-];
 
+var map, pointarray, heatmap;
 
 function initialize() {
     var config = {
@@ -94,7 +96,7 @@ function initialize() {
 
         if (queryWindow) {
             // remove exitsing rectangles if any
-            queryWindow.setMap(null);
+            // queryWindow.setMap(null);
         }
         queryWindow = rectangle;
         qwNe = queryWindow.getBounds().getNorthEast();
@@ -108,6 +110,7 @@ function initialize() {
         });
         google.maps.event.addListener(rectangle, 'dragend', handleQueryWindowDrag);
         google.maps.event.addListener(rectangle, 'bounds_changed', handleQueryWindowResize);
+        google.maps.event.addListener(rectangle, 'dblclick', handleDoubleClick);
 
     });
 
@@ -115,16 +118,22 @@ function initialize() {
         var bounds = rectangle.getBounds();
 
         var logStr = "A : [long: " + bounds.va.j + ", lat: " + bounds.Da.j + "], B: [long: " + bounds.va.k + ", lat: " + bounds.Da.k + "]";
-        Log("Generating heatmap for: " + logStr);
+        Log("Generating heatmap for: " + logStr, true);
         console.log(logStr)
 
         var data = { ALong: bounds.va.j, ALat: bounds.Da.j, BLong: bounds.va.k, BLat: bounds.Da.k}
         return data;
     }
 
+    function handleDoubleCilck(event) {
+        console.log(
+                "Double Clicked"
+        );
+    }
+
     function handleQueryWindowDrag(event) {
         isBeignDragged = false;
-        handleQueryWindowChange(event);
+        handleQueryWindowChange(this);
     }
 
     function handleQueryWindowResize(event) {
@@ -146,21 +155,21 @@ function initialize() {
          return; // let the drag event handler take care
          }*/
         if (!isBeignDragged)
-            handleQueryWindowChange(event);
+            handleQueryWindowChange(this);
     }
 
-    function handleQueryWindowChange(event) {
+    function handleQueryWindowChange(rectangle) {
 
         if (queryWindow == null)
             return; // query window doesnt exist
 
         if (busy) {
-            handleBusyState(queryWindow);
+            handleBusyState(rectangle);
             return;
         }
 
-        var ne = queryWindow.getBounds().getNorthEast();
-        var sw = queryWindow.getBounds().getSouthWest();
+        var ne = rectangle.getBounds().getNorthEast();
+        var sw = rectangle.getBounds().getSouthWest();
 
 
         var contentString = 'Query window changed: ' +
@@ -181,7 +190,7 @@ function initialize() {
                     data: data,
                     success: function (data) {
                         // var dataSet = [];
-                        heatmap.setDataSet({ max: -1, data: [] });
+                        // heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
                         for (var i = 0; i < data.tweets.length; i++) {
                             var tweet = JSON.parse(data.tweets[i]);
                             heatmap.addDataPoint(tweet.loc[1], tweet.loc[0]);
@@ -189,7 +198,7 @@ function initialize() {
                         }
                         // heatmap.setDataSet(dataSet);
                         console.log("success", data);
-                        Log('Heatmap complete. Found ' + data.tweets.length + " tweets in this area!", true)
+                        Log('Heatmap complete. Found ' + data.tweets.length + " tweets in this area!", false, true)
 
                         // remove the rectangle
                         // rectangle.setMap(null);
@@ -220,7 +229,7 @@ function initialize() {
         if (spaceBelow) cssClasses.push("mbottom25");
         if (spaceAbove) cssClasses.push("top25");
 
-        $("#result").append($("<p />").addClass(cssClasses.join(" ")).html(message));
+        $("#result").prepend($("<p />").addClass(cssClasses.join(" ")).html(message));
     }
 
     /*
@@ -233,8 +242,33 @@ function initialize() {
 
 
 }
-;
 
+$(function () {
+
+    showPanel();
+
+    $(".btn").on("click", function () {
+        var id = $(this).attr("id");
+        if (id === "left") {
+            hidePanel();
+        }
+        else if (id === 'right') {
+            showPanel();
+        }
+    });
+
+    function hidePanel() {
+        $("#log_container").animate({left: -400}, 200, "swing");
+        $("#right").show();
+        $("#left").hide();
+    }
+
+    function showPanel() {
+        $("#log_container").animate({left: 0}, 200, "swing");
+        $("#right").hide();
+        $("#left").show();
+    }
+});
 
 </script>
 
@@ -259,15 +293,28 @@ function initialize() {
 
 <body onload="initialize()">
 
-<h1 style="text-align: center">Tweets HeatMap</h1>
+<!-- <h1 style="text-align: center">Tweets HeatMap</h1> -->
 
-<p>Start by marking an area...</p>
+<!-- <p>Start by marking an area...</p> -->
 
-<div style="float: left; margin: 0 auto;">
-    <div id="map_canvas" style="height: 600px; width: 800px; float: left"></div>
-    <div id="result" style="float: left; width: 400px; height: 600px; overflow-y: scroll; margin-left: 25px"></div>
-    <div style="clear: both"></div>
+<div class="container">
+    <div id="map_canvas" class="center" style="height: 600px; "></div>
+    <div id="log_container" style="width: 452px; position: absolute; left: 0; top: 0;">
+        <div style="width: 400px; height: 600px; overflow-y: scroll; background: #FFF;"
+             class="pull-left">
+            <h2 class="text-center">Updates</h2>
+            <hr/>
+            <div id="result"></div>
+        </div>
+        <button id="left" type="button" class="btn btn-default btn-lg pull-right">
+            <span class="glyphicon glyphicon-menu-left" aria-hidden="true"></span>
+        </button>
+        <button id="right" type="button" class="btn btn-default btn-lg pull-right">
+            <span class="glyphicon glyphicon-menu-right" aria-hidden="true"></span>
+        </button>
+    </div>
 </div>
+
 <!-- <button onclick="toggleHeatmap()">Toggle Heatmap</button>
 <button onclick="changeGradient()">Change gradient</button>
 <button onclick="changeRadius()">Change radius</button>
