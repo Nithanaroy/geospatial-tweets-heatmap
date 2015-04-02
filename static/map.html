@@ -164,11 +164,15 @@ function initialize() {
     function generateHeatmap(data) {
         busy = true;
         $.ajax({
-                    url: "http://localhost:5000/rect",
+                    url: "/rect",
                     type: "POST",
                     dataType: "json",
                     data: data,
                     success: function (data) {
+
+                        Log('Database took ' + data.dbtime + " milli seconds", false, false)
+                        Log('Server took ' + data.apptime + " milli seconds", false, false)
+
                         // var dataSet = [];
                         // heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
                         for (var i = 0; i < data.tweets.length; i++) {
@@ -274,6 +278,9 @@ $(function () {
                 updateProgressbar(0);
             }, 1000);
             /*data.context.text('Upload finished.');*/
+        },
+        always: function (e, data) {
+            $("#uploadForm")[0].reset();
             $("#uploadSubmitBtn").attr('disabled', false);
         },
         progressall: function (e, data) {
@@ -349,7 +356,7 @@ $(function () {
                     <h3 class="panel-title">Add new data</h3>
                 </div>
                 <div class="panel-body collapse" id="collapseExample">
-                    <form action="/upload" method=post enctype=multipart/form-data>
+                    <form id="uploadForm" action="/upload" method=post enctype=multipart/form-data>
                         <div class="form-group">
                             <input id="fileupload" type="file" name="file" data-url="/upload">
 
@@ -364,7 +371,7 @@ $(function () {
                             <!-- <input type="file" id="file" name="file"> -->
 
                             <p class="help-block">Choose a .csv file with format:
-                                longitude,latitude,any_other_data_you_want</p>
+                                longitude, latitude, any_other_data_you_want. First row is assumed to be header</p>
                         </div>
                         <button type="submit" id="uploadSubmitBtn" class="btn btn-default">Upload & Insert</button>
                     </form>
