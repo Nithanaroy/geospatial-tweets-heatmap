@@ -118,7 +118,8 @@ function initialize() {
     function getQueryWindowBounds(rectangle) {
         var bounds = rectangle.getBounds();
 
-        var logStr = "A : [long: " + bounds.va.j + ", lat: " + bounds.Da.j + "], B: [long: " + bounds.va.k + ", lat: " + bounds.Da.k + "]";
+        var logStr = "A : [long: " + (bounds.va.j).toFixed(2) + ", lat: " + (bounds.Da.j).toFixed(2) + "], B: [long: "
+                + (bounds.va.k).toFixed(2) + ", lat: " + (bounds.Da.k).toFixed(2) + "]";
         Log("Generating heatmap for: " + logStr, true);
         console.log(logStr)
 
@@ -153,8 +154,8 @@ function initialize() {
 
 
         var contentString = 'Query window changed: ' +
-                'New north-east corner: ' + ne.lat() + ', ' + ne.lng() + '<br>' +
-                'New south-west corner: ' + sw.lat() + ', ' + sw.lng();
+                'New north-east corner: ' + (ne.lat()).toFixed(2) + ', ' + (ne.lng()).toFixed(2) + '. ' +
+                'New south-west corner: ' + (sw.lat()).toFixed(2) + ', ' + (sw.lng()).toFixed(2);
         Log(contentString);
 
         var data = { ALong: sw.lng(), ALat: sw.lat(), BLong: ne.lng(), BLat: ne.lat()};
@@ -163,6 +164,7 @@ function initialize() {
 
     function generateHeatmap(data) {
         busy = true;
+        var start = new Date().getTime();
         $.ajax({
                     url: "/rect",
                     type: "POST",
@@ -170,8 +172,10 @@ function initialize() {
                     data: data,
                     success: function (data) {
 
-                        Log('Database took ' + data.dbtime + " milli seconds", false, false)
-                        Log('Server took ' + data.apptime + " milli seconds", false, false)
+                        var dbtime = data.dbtime;
+                        var servertime = data.apptime;
+                        Log('Database took ' + (dbtime).toFixed(2) + " milli seconds", false, false)
+                        Log('Server took ' + (servertime).toFixed(2) + " milli seconds", false, false)
 
                         // var dataSet = [];
                         // heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
@@ -182,10 +186,13 @@ function initialize() {
                         }
                         // heatmap.setDataSet(dataSet);
                         console.log("success", data);
-                        Log('Heatmap complete. Found ' + data.tweets.length + " tweets in this area!", false, true)
+                        Log('Heatmap complete. Found ' + data.tweets.length + " tweets in this area!", false, false)
 
                         // remove the rectangle
                         // rectangle.setMap(null);
+
+                        var end = new Date().getTime() - start - dbtime - servertime;
+                        Log('UI took ' + (end).toFixed(2) + " milli seconds", false, true)
                     },
                     error: function (err) {
                         console.log("error", err);
