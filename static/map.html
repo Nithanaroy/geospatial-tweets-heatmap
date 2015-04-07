@@ -279,7 +279,10 @@ $(function () {
         },
         done: function (e, data) {
             $.each(data.result.files, function (index, file) {
-                Log("Uploaded file " + file.name, true, true);
+                if (file.status == 0)
+                    Log("Uploaded file " + file.name + ". Saved " + file.records + " records", true, true);
+                else
+                    Log("Something went wrong while uploading file " + file.name, true, true);
             });
             window.setTimeout(function () {
                 updateProgressbar(0);

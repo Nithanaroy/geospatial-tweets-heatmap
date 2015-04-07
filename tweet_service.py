@@ -7,31 +7,40 @@ HTTP and JSON/JSONP
 """
 
 DB = 'tstream'
-CELLS_COLLECTION = 'tweets'
 
 import json
-import sys
-from threading import Thread
-
 # import redis
 # from bson import json_util
+
 from flask import jsonify
-
+import sys
+from threading import Thread
 from pymongo import MongoClient
-
 import os
 from flask import Flask, request, redirect, url_for
-
 import re, time, json, pymongo
 
 UPLOAD_FOLDER = 'uploads'
 PROCESSED_FOLDER = 'dbimports'
 ALLOWED_EXTENSIONS = set(['csv'])
+ENV = 'DEVELOPMENT'
+D = True  # Turn on Debugging
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-client = MongoClient("mongodb://admin:password@ds045679.mongolab.com:45679/tstream")
+try:
+    if os.environ['ENV'] == 'PR0DUCTION':
+        ENV = 'PRODUCTION'
+    if os.environ['DEBUG'] == 'False':
+        D = False
+except:
+    pass
+
+if ENV == 'PRODUCTION':
+    client = MongoClient("mongodb://admin:password@ds045679.mongolab.com:45679/tstream")
+else:
+    client = MongoClient()
 db = client.tstream
 db.set_profiling_level(pymongo.ALL)
 
@@ -94,13 +103,16 @@ def get_profile_info():
 
 def fetch_records(coords):
     collection = db.tweets_tail
-    cursor = collection.find({"loc": {"$geoWithin": {"$box": coords}}}, {"loc": 1, "_id": 0})
+    query = {"loc": {"$geoWithin": {"$box": coords}}}
+    log(query)
+    cursor = collection.find(query, {"loc": 1, "_id": 0})
     start = time.clock()
     tweets = []
     for tweet in cursor:
         # tweets.append(json.dumps(tweet, default=json_util.default))
         tweets.append(json.dumps(tweet))
     end = time.clock() - start
+    log('Completed fetching tweets', True)
     return {"tweets": tweets, "time": end}
 
 
@@ -121,7 +133,7 @@ app = Flask(__name__)
 
 @app.route('/rect', methods=['GET', 'POST'])
 def rect():
-    # print request.form
+    log('Received req: {0}'.format(request.form))
     f = request.form
     res = fetch_records([[float(f.get("ALong")), float(f.get("ALat"))], [float(f.get("BLong")), float(f.get("BLat"))]])
     return jsonify({"tweets": res['tweets'],
@@ -138,16 +150,23 @@ def allowed_file(filename):
 def upload():
     if request.method == 'POST':
         file = request.files['file']
+        log('Received req: {0}'.format(file))
         if file and allowed_file(file.filename):
             # filename = secure_filename(file.filename)
             filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), UPLOAD_FOLDER, file.filename)
             file.save(filepath)  # to file system
-            save_data_to_db(filepath)
-            return jsonify({"files": [{"name": file.filename}]})
+            result = save_data_to_db(filepath)
+            os.remove(filepath)
+            return jsonify(
+                {"files": [
+                    {"name": file.filename, "records": result["records_found"], "status": result["mongo_import"]}]})
 
 
 def save_data_to_db(filepath):
-    converted = os.path.join(os.path.dirname(os.path.realpath(__file__)), PROCESSED_FOLDER, str(int(time.time())))
+    converted = os.path.join(os.path.dirname(os.path.realpath(__file__)), PROCESSED_FOLDER,
+                             str(int(time.time())) + ".json")
+    log('Converting {0} to {1}'.format(filepath, converted))
+    count = 0
     with open(filepath, "r") as fr:
         with open(converted, "w") as fw:
             keys = [x.strip() for x in fr.next().split(",")]  # ignore the header line of csv
@@ -159,10 +178,22 @@ def save_data_to_db(filepath):
                     if len(k) == 0: continue  # ignore column when corresponding key is empty
                     obj[k] = temp[i + 2]
                 fw.write('%s\n' % (json.dumps(obj), ))  # longitude, latitude
+                count += 1
 
-    # os.system('mongoimport --db tstream --collection tweets_tail --type json --file  "' + converted + '"')
-    os.system(
-        'mongoimport --host ds045679.mongolab.com --port 45679 --db tstream  -u admin -p password --collection tweets_tail --type json --file "' + converted + '"')
+    log('Completed conversion', True)
+
+    status = 0
+    if ENV == 'PRODUCTION':
+        status = os.system(
+            'mongoimport --host ds045679.mongolab.com --port 45679 --db tstream  -u admin -p password --collection tweets_tail --type json --file "' + converted + '"')
+    else:
+        status = os.system('mongoimport --db tstream --collection tweets_tail --type json --file  "' + converted + '"')
+
+    log("MongoDB Import Status (0 => success): {0}".format(status))
+
+    os.remove(converted)
+
+    return {"records_found": count, "mongo_import": status}
 
     # @app.route('/tweets')
     # def tweets():
@@ -173,6 +204,17 @@ def save_data_to_db(filepath):
     # url_for('static', filename='twitter.ico')
     # # return Response(event_stream(), headers={'Content-Type': 'text/event-stream'})
     # return "Hello World!"
+
+
+def log(message, only_debug=False):
+    if only_debug:
+        if D:
+            print "\nD: {0} \n".format(message)
+    else:
+        print "\nD: {0} \n".format(message)
+
+
+log('Running in {0} ENVIRONMENT'.format(ENV))
 
 
 def runThread():
