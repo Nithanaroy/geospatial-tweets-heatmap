@@ -1,1 +1,1 @@
-web: gunicorn tweet_service.py:app --log-file=-
+web: gunicorn tweet_service.py
