@@ -28,3 +28,8 @@ pip-log.txt
 
 uploads/
 dbimports/
+
+venv
+*.pyc
+
+.idea/
