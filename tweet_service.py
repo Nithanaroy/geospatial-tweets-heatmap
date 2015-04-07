@@ -13,8 +13,8 @@ import json
 import sys
 from threading import Thread
 
-import redis
-from bson import json_util
+# import redis
+# from bson import json_util
 from flask import jsonify
 
 from pymongo import MongoClient
@@ -26,12 +26,12 @@ import re, time, json, pymongo
 
 UPLOAD_FOLDER = 'uploads'
 PROCESSED_FOLDER = 'dbimports'
-ALLOWED_EXTENSIONS = set(['csv', 'txt'])
+ALLOWED_EXTENSIONS = set(['csv'])
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-client = MongoClient()
+client = MongoClient("mongodb://admin:password@ds045679.mongolab.com:45679/tstream")
 db = client.tstream
 db.set_profiling_level(pymongo.ALL)
 
@@ -98,7 +98,8 @@ def fetch_records(coords):
     start = time.clock()
     tweets = []
     for tweet in cursor:
-        tweets.append(json.dumps(tweet, default=json_util.default))
+        # tweets.append(json.dumps(tweet, default=json_util.default))
+        tweets.append(json.dumps(tweet))
     end = time.clock() - start
     return {"tweets": tweets, "time": end}
 
@@ -141,7 +142,7 @@ def upload():
             # filename = secure_filename(file.filename)
             filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), UPLOAD_FOLDER, file.filename)
             file.save(filepath)  # to file system
-            # save_data_to_db(filepath)
+            save_data_to_db(filepath)
             return jsonify({"files": [{"name": file.filename}]})
 
 
@@ -159,7 +160,9 @@ def save_data_to_db(filepath):
                     obj[k] = temp[i + 2]
                 fw.write('%s\n' % (json.dumps(obj), ))  # longitude, latitude
 
-    os.system('mongoimport --db tsream --collection tweets_tails --type json --file  "' + converted + '"')
+    # os.system('mongoimport --db tstream --collection tweets_tail --type json --file  "' + converted + '"')
+    os.system(
+        'mongoimport --host ds045679.mongolab.com --port 45679 --db tstream  -u admin -p password --collection tweets_tail --type json --file "' + converted + '"')
 
     # @app.route('/tweets')
     # def tweets():
