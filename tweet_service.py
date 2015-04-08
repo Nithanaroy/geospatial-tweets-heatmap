@@ -7,6 +7,7 @@ import os
 from flask import Flask, request
 import re, time, json, pymongo
 
+
 DB = 'tstream'
 UPLOAD_FOLDER = 'uploads'
 PROCESSED_FOLDER = 'dbimports'
@@ -16,21 +17,6 @@ D = True  # Turn on Debugging
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-try:
-    if os.environ['ENV'] == 'PRODUCTION':
-        ENV = 'PRODUCTION'
-    if os.environ['DEBUG'] == 'False':
-        D = False
-except:
-    pass
-
-if ENV == 'PRODUCTION':
-    client = MongoClient("mongodb://admin:password@ds045679.mongolab.com:45679/tstream")
-else:
-    client = MongoClient()
-db = client.tstream
-db.set_profiling_level(pymongo.ALL)
 
 
 def get_profile_info():
@@ -57,34 +43,9 @@ def fetch_records(coords):
     return {"tweets": tweets, "time": end}
 
 
-@app.route('/rect', methods=['GET', 'POST'])
-def rect():
-    log('Received req: {0}'.format(request.form))
-    f = request.form
-    res = fetch_records([[float(f.get("ALong")), float(f.get("ALat"))], [float(f.get("BLong")), float(f.get("BLat"))]])
-    return jsonify({"tweets": res['tweets'],
-                    "apptime": res['time'],
-                    "dbtime": get_profile_info()})
-
-
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
-
-
-@app.route('/upload', methods=['GET', 'POST'])
-def upload():
-    if request.method == 'POST':
-        file = request.files['file']
-        log('Received req: {0}'.format(file))
-        if file and allowed_file(file.filename):
-            filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), UPLOAD_FOLDER, file.filename)
-            file.save(filepath)  # to file system
-            result = save_data_to_db(filepath)
-            os.remove(filepath)
-            return jsonify(
-                {"files": [
-                    {"name": file.filename, "records": result["records_found"], "status": result["mongo_import"]}]})
 
 
 def save_data_to_db(filepath):
@@ -128,6 +89,54 @@ def log(message, only_debug=False):
     else:
         print "\nD: {0} \n".format(message)
 
+
+def fetch_environment_variable(key, default=None):
+    value = default
+    try:
+        value = os.environ[key] == 'PRODUCTION'
+    finally:
+        return value
+
+
+def create_viz_index():
+    pass
+
+
+@app.route('/rect', methods=['GET', 'POST'])
+def rect():
+    log('Received req: {0}'.format(request.form))
+    f = request.form
+    res = fetch_records([[float(f.get("ALong")), float(f.get("ALat"))], [float(f.get("BLong")), float(f.get("BLat"))]])
+    return jsonify({"tweets": res['tweets'],
+                    "apptime": res['time'],
+                    "dbtime": get_profile_info()})
+
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    file = request.files['file']
+    log('Received req: {0}'.format(file))
+    if file and allowed_file(file.filename):
+        filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), UPLOAD_FOLDER, file.filename)
+        file.save(filepath)  # to file system
+        result = save_data_to_db(filepath)
+        os.remove(filepath)
+        return jsonify(
+            {"files": [
+                {"name": file.filename, "records": result["records_found"], "status": result["mongo_import"]}]})
+
+
+ENV = fetch_environment_variable('ENV', ENV)
+if str(fetch_environment_variable('DEBUG', D)) == 'False':
+    D = False
+
+if ENV == 'PRODUCTION':
+    client = MongoClient("mongodb://admin:password@ds045679.mongolab.com:45679/tstream")
+else:
+    client = MongoClient()
+
+db = client.tstream  # tstream is the name of the collection
+db.set_profiling_level(pymongo.ALL)
 
 log('Running in {0} ENVIRONMENT'.format(ENV))
 
