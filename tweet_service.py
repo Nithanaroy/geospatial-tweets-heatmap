@@ -1,25 +1,13 @@
 #!/bin/env python
 # encoding: utf-8
 
-"""
-Webservice prototype for exposing cell data via
-HTTP and JSON/JSONP
-"""
-
-DB = 'tstream'
-
-import json
-# import redis
-# from bson import json_util
-
 from flask import jsonify
-import sys
-from threading import Thread
 from pymongo import MongoClient
 import os
-from flask import Flask, request, redirect, url_for
+from flask import Flask, request
 import re, time, json, pymongo
 
+DB = 'tstream'
 UPLOAD_FOLDER = 'uploads'
 PROCESSED_FOLDER = 'dbimports'
 ALLOWED_EXTENSIONS = set(['csv'])
@@ -45,52 +33,6 @@ db = client.tstream
 db.set_profiling_level(pymongo.ALL)
 
 
-
-# red = redis.StrictRedis()
-
-
-def signal_handler(signal, frame):
-    print 'You pressed Ctrl+C!'
-    sys.exit(0)
-
-
-# def tail_mongo_thread():
-# print "beginning to tail..."
-# db = Connection().tstream
-# coll = db.tweets_tail
-# cursor = coll.find({"coordinates.type": "Point"}, {"coordinates": 1}, tailable=True, timeout=False)
-# ci = 0
-# while cursor.alive:
-# try:
-# doc = cursor.next()
-# ci += 1
-# red.publish('chat', u'%s' % json.dumps(doc, default=json_util.default))
-# except StopIteration:
-# pass
-
-def tail_mongo_thread():
-    client = MongoClient()
-    db = client.tstream
-    collection = db.tweets_tail
-    # cursor = collection.find({"coordinates.type": "Point"}, {"coordinates": 1})
-    usa = [[-127.103022, 33.332402], [-56.318116, 50.966758]]
-    canada = [[-141.835688, 48.028172], [-74.687255, 68.355474]]
-    africa = [[-21.299549, -32.582041], [33.719978, 31.017117]]
-    northasia = [[36.005138, 44.183743], [137.218481, 74.667217]]
-    southasia = [[40.569780, 14.789655], [145.159617, 55.287816]]
-    australia = [[106.261201, -35.578352], [157.589323, -11.320211]]
-    southamerica = [[-93.727095, -52.258807], [-30.094287, 12.397849]]
-    ustoplleft = [[-127.450990, 41.705594], [-105.123861, 48.562837]]
-    ustopright = [[-103.366048, 40.966260], [-61.705895, 49.141154]]
-    usbottomleft = [[-125.162922, 32.234697], [-102.487142, 38.534037]]
-    usbottomright = [[-100.905111, 30.129506], [-73.307457, 37.285905]]  # 78, 282
-    cursor = collection.find({"loc": {"$geoWithin": {"$box": usa}}})
-    # for tweet in cursor:
-    # print(tweet)
-    # red.publish('chat', u'%s' % json.dumps(tweet, default=json_util.default))
-    # time.sleep(0.0001)
-
-
 def get_profile_info():
     """
     Gets the profile information of the last executed query
@@ -109,26 +51,10 @@ def fetch_records(coords):
     start = time.clock()
     tweets = []
     for tweet in cursor:
-        # tweets.append(json.dumps(tweet, default=json_util.default))
         tweets.append(json.dumps(tweet))
     end = time.clock() - start
     log('Completed fetching tweets', True)
     return {"tweets": tweets, "time": end}
-
-
-# def event_stream():
-# # pubsub = red.pubsub()
-# pubsub.subscribe('chat')
-# i = 0
-# for message in pubsub.listen():
-# i += 1
-# # if 10000 % i == 0:
-# print i
-# # time.sleep(0.5)
-# yield 'data: %s\n\n' % message['data']
-
-
-app = Flask(__name__)
 
 
 @app.route('/rect', methods=['GET', 'POST'])
@@ -152,7 +78,6 @@ def upload():
         file = request.files['file']
         log('Received req: {0}'.format(file))
         if file and allowed_file(file.filename):
-            # filename = secure_filename(file.filename)
             filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), UPLOAD_FOLDER, file.filename)
             file.save(filepath)  # to file system
             result = save_data_to_db(filepath)
@@ -195,16 +120,6 @@ def save_data_to_db(filepath):
 
     return {"records_found": count, "mongo_import": status}
 
-    # @app.route('/tweets')
-    # def tweets():
-    # url_for('static', filename='map.html')
-    # url_for('static', filename='jquery-1.7.2.min.js')
-    # url_for('static', filename='jquery.eventsource.js')
-    # url_for('static', filename='jquery-1.11.2.min.js')
-    # url_for('static', filename='twitter.ico')
-    # # return Response(event_stream(), headers={'Content-Type': 'text/event-stream'})
-    # return "Hello World!"
-
 
 def log(message, only_debug=False):
     if only_debug:
@@ -216,13 +131,5 @@ def log(message, only_debug=False):
 
 log('Running in {0} ENVIRONMENT'.format(ENV))
 
-
-def runThread():
-    st = Thread(target=tail_mongo_thread)
-    st.start()
-
-
 if __name__ == '__main__':
-    # signal.signal(signal.SIGINT, signal_handler)
-    # app.before_first_request(runThread)
-    app.run(debug=True, host='0.0.0.0')  
+    app.run(debug=True, host='0.0.0.0')
