@@ -123,6 +123,7 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
     :param win: Southwest and Northeast co-ordinates of the window to split and aggregate on
     :return: [{'loc': [longitude, latitude], 'count': dbrecords['tweets'], 'dbtime': dbrecords['time']}, ... ]
     """
+    log("Started aggregating for Zoom {0}. Rows: {1}. Columns {2}".format(current_zoom, longpieces, latpieces))
     point = namedtuple('point', 'long lat')
     box = namedtuple('box', 'sw ne nw se')
     ne = point(float(win["ne"][0]), float(win["ne"][1]))
@@ -132,8 +133,9 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
     longstep = abs(ne.long - nw.long) / longpieces
     latstep = abs(ne.lat - se.lat) / latpieces
     res = []
-    start = time.clock()
+
     for i in range(1, latpieces + 1):
+        start = time.clock()
         for j in range(1, longpieces + 1):
             current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
                               point(nw.long + longstep, nw.lat - latstep))
@@ -145,7 +147,7 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
                  'dbtime': dbrecords['time']})
             nw = point(nw.long + longstep, nw.lat)
         nw = point(nw.long - longpieces * longstep, nw.lat - latstep)
-        log("i: {0}/{1}. Took {2}ms".format(i, latpieces, time.clock() - start))
+        print("row {0} of {1}. Took {2}s".format(i, latpieces, time.clock() - start))
     log("Completed for zoom level " + str(current_zoom))
     return res
 
@@ -159,19 +161,23 @@ def create_viz_index(win):
     """
 
     # Key => Zoom Level. Value => {longpieces: #, latpieces: #}
-    zoom_split = {3: {"longpieces": 2, "latpieces": 2}, 8: {"longpieces": 64, "latpieces": 64}}
+    # Google Maps Zoom Level: valid range [0 to 19]. 0 is the entire world
+    zoom_split = {3: {"longpieces": 2, "latpieces": 2}, 4: {"longpieces": 4, "latpieces": 4}, 5: {"longpieces": 8, "latpieces": 8}, 6: {"longpieces": 16, "latpieces": 16}, 7: {"longpieces": 32, "latpieces": 32}, 8: {"longpieces": 64, "latpieces": 64}}
 
-    current_zoom = 8  # valid range [0 to 19]. 0 is the entire world
-    longpieces = zoom_split[8]['longpieces']  # number of partitions at this zoom level along a latitude
-    latpieces = zoom_split[8]['latpieces']  # number of partitions at this zoom level along a longitude
+    for current_zoom in zoom_split.keys():
+        start = time.clock()
+        longpieces = zoom_split[current_zoom]['longpieces']  # number of partitions at this zoom level along a latitude
+        latpieces = zoom_split[current_zoom]['latpieces']  # number of partitions at this zoom level along a longitude
 
-    # res = [{'count': 0, 'loc': [-123.4921875, 47.8359375], 'dbtime': 1.1927424280530305}, {'count': 205, 'loc': [-122.4765625, 47.8359375], 'dbtime': 0.7841739764205902}, {'count': 3, 'loc': [-121.4609375, 47.8359375], 'dbtime': 0.7880645277188947}, {'count': 0, 'loc': [-120.4453125, 47.8359375], 'dbtime': 0.8170583736674351}, {'count': 0, 'loc': [-119.4296875, 47.8359375], 'dbtime': 0.8143077846954538}, {'count': 0, 'loc': [-118.4140625, 47.8359375], 'dbtime': 1.3636520882200474}, {'count': 59, 'loc': [-117.3984375, 47.8359375], 'dbtime': 1.0837849212907598}, {'count': 0, 'loc': [-116.3828125, 47.8359375], 'dbtime': 1.0629324902094632}]
-    res = aggregate_tweets_dummy(current_zoom, latpieces, longpieces, win)
-    # res = aggregate_tweets(current_zoom, latpieces, longpieces, win)
+        # res = aggregate_tweets_dummy(current_zoom, latpieces, longpieces, win)
+        res = aggregate_tweets(current_zoom, latpieces, longpieces, win)
 
-    # Save to MongoDB into vizindex collection
-    db.vizindex.insert({"win": [[float(win["sw"][0]), float(win['sw'][1])], [float(win["ne"][0]), float(win["ne"][1])]],
-                            "zoom": current_zoom, "counts": res})
+        # Save to MongoDB into vizindex collection
+        db.vizindex.insert({"win": [[float(win["sw"][0]), float(win['sw'][1])], [float(win["ne"][0]), float(win["ne"][1])]],
+                                "zoom": current_zoom, "longpieces": longpieces, "latpieces": latpieces, "counts": res})
+        end = time.clock() - start
+        print('Zoom: {0}. Time taken: {1}s'.format(current_zoom, end))
+        print('===============================================')
     db.vizindex.create_index([("counts.loc", GEO2D)])
     return res
 
