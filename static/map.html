@@ -316,6 +316,9 @@ $(function () {
         $("#left").show();
         window.localStorage.setItem("showpanel", true);
     }
+
+    $("#map_canvas, #log_container").css({height: $(".content-area").height()})
+    initialize();
 });
 
 </script>
@@ -341,66 +344,104 @@ $(function () {
     .margin15 {
         margin: 15px;
     }
+
+    /* Borrowed */
+    html, body {
+        height: 100%;
+    }
+
+    .container-fluid {
+        margin: 0 auto;
+        height: 100%;
+        padding: 0;
+
+        -moz-box-sizing: border-box;
+        -webkit-box-sizing: border-box;
+        box-sizing: border-box;
+    }
+
+    .columns {
+        background-color: #C9E6FF;
+        height: 100%;
+    }
+
+    .content-area, .article-tree {
+        background: #bada55;
+        overflow: auto;
+        height: 100%;
+    }
+
+    .footer {
+        background: red;
+        height: 20px;
+    }
 </style>
 
-<body onload="initialize()">
+<body>
 
 <!-- <h1 style="text-align: center">Tweets HeatMap</h1> -->
 
 <!-- <p>Start by marking an area...</p> -->
 
-<div class="container">
-    <div id="map_canvas" class="center" style="height: 600px; "></div>
-    <div id="log_container" style="width: 452px; position: absolute; left: 0; top: 0;">
-        <div style="width: 400px; height: 600px; overflow-y: scroll; background: #FFF;"
-             class="pull-left">
+<div class="container-fluid">
+    <div class="row-fluid columns content">
+        <div class="span12 content-area">
+            <div id="map_canvas" class="center span12"></div>
+            <div id="log_container" style="width: 452px; position: absolute; left: 0; top: 0;">
+                <div style="width: 400px; height: 100%; overflow-y: scroll; background: #FFF;"
+                     class="pull-left">
 
-            <a href="javascript:void(0)" id="clear_storage" class="pull-right margin15">Clear Settings</a>
+                    <a href="javascript:void(0)" id="clear_storage" class="pull-right margin15">Clear Settings</a>
 
-            <div class="clearfix"></div>
+                    <div class="clearfix"></div>
 
-            <!-- file upload -->
-            <div class="panel panel-default margin15">
-                <div class="panel-heading" data-toggle="collapse" data-target="#collapseExample" aria-expanded="true"
-                     aria-controls="collapseExample" style="cursor: pointer">
-                    <h3 class="panel-title">Add new data</h3>
-                </div>
-                <div class="panel-body collapse" id="collapseExample">
-                    <form id="uploadForm" action="/upload" method=post enctype=multipart/form-data>
-                        <div class="form-group">
-                            <input id="fileupload" type="file" name="file" data-url="/upload">
-
-                            <br>
-
-                            <div class="progress">
-                                <div class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0"
-                                     aria-valuemax="100" style="width: 0%;">
-
-                                </div>
-                            </div>
-                            <!-- <input type="file" id="file" name="file"> -->
-
-                            <p class="help-block">Choose a .csv file with format:
-                                longitude, latitude, any_other_data_you_want. First row is assumed to be header.
-                                <a href="https://raw.githubusercontent.com/Nithanaroy/geospatial-tweets-heatmap/master/sample_import_format.csv"
-                                   target="_blank">(sample file)</a>
-                            </p>
+                    <!-- file upload -->
+                    <div class="panel panel-default margin15">
+                        <div class="panel-heading" data-toggle="collapse" data-target="#collapseExample"
+                             aria-expanded="true"
+                             aria-controls="collapseExample" style="cursor: pointer">
+                            <h3 class="panel-title">Add new data</h3>
                         </div>
-                        <button type="submit" id="uploadSubmitBtn" class="btn btn-default">Upload & Insert</button>
-                    </form>
-                </div>
-            </div>
+                        <div class="panel-body collapse" id="collapseExample">
+                            <form id="uploadForm" action="/upload" method=post enctype=multipart/form-data>
+                                <div class="form-group">
+                                    <input id="fileupload" type="file" name="file" data-url="/upload">
 
-            <h4 class="text-center top25">Updates</h4>
-            <hr/>
-            <div id="result" class="margin15"></div>
+                                    <br>
+
+                                    <div class="progress">
+                                        <div class="progress-bar" role="progressbar" aria-valuenow="60"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100" style="width: 0%;">
+
+                                        </div>
+                                    </div>
+                                    <!-- <input type="file" id="file" name="file"> -->
+
+                                    <p class="help-block">Choose a .csv file with format:
+                                        longitude, latitude, any_other_data_you_want. First row is assumed to be header.
+                                        <a href="https://raw.githubusercontent.com/Nithanaroy/geospatial-tweets-heatmap/master/sample_import_format.csv"
+                                           target="_blank">(sample file)</a>
+                                    </p>
+                                </div>
+                                <button type="submit" id="uploadSubmitBtn" class="btn btn-default">Upload & Insert
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <h4 class="text-center top25">Updates</h4>
+                    <hr/>
+                    <div id="result" class="margin15"></div>
+                </div>
+                <button id="left" type="button" class="btn btn-default btn-lg pull-right">
+                    <span class="glyphicon glyphicon-menu-left" aria-hidden="true"></span>
+                </button>
+                <button id="right" type="button" class="btn btn-default btn-lg pull-right">
+                    <span class="glyphicon glyphicon-menu-right" aria-hidden="true"></span>
+                </button>
+            </div>
         </div>
-        <button id="left" type="button" class="btn btn-default btn-lg pull-right">
-            <span class="glyphicon glyphicon-menu-left" aria-hidden="true"></span>
-        </button>
-        <button id="right" type="button" class="btn btn-default btn-lg pull-right">
-            <span class="glyphicon glyphicon-menu-right" aria-hidden="true"></span>
-        </button>
     </div>
 </div>
 
