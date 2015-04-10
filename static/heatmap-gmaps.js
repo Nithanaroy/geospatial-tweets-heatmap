@@ -129,6 +129,13 @@ HeatmapOverlay.prototype.pixelTransform = function (p) {
     return p;
 }
 
+/*
+    Added by Nitin
+ */
+HeatmapOverlay.prototype.clear = function() {
+    this.heatmap.clear();
+}
+
 HeatmapOverlay.prototype.setDataSet = function (data) {
 
     var mapdata = {

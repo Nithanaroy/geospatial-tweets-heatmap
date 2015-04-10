@@ -23,7 +23,7 @@
 
 <script type="text/javascript">
 
-var map, pointarray, heatmap, D = false, preciseMode = false;
+var map, pointarray, heatmap, D = true, preciseMode = true;
 
 function initialize() {
     var config = {
@@ -90,7 +90,7 @@ function initialize() {
             zIndex: 1
         }
     });
-    // drawingManager.setMap(map);
+    drawingManager.setMap(map);
 
     var busy = false;
 
@@ -131,7 +131,19 @@ function initialize() {
                 new google.maps.LatLng(48, -59))
     });
 
-    generateHeatmapUsingIndex({win:[[-124, 27], [-59, 48]], zoom_level: 3});
+    google.maps.event.addListener(map, 'zoom_changed', function () {
+        generateHeatmapUsingIndex({win: [
+            [-124, 27],
+            [-59, 48]
+        ], zoom_level: map.getZoom()});
+    });
+
+    google.maps.event.addListener(map, 'tilesloaded', function () {
+        generateHeatmapUsingIndex({win: [
+            [-124, 27],
+            [-59, 48]
+        ], zoom_level: map.getZoom()});
+    });
 }
 
 function getQueryWindowBounds(rectangle) {
@@ -229,20 +241,30 @@ function generateHeatmap(data) {
 }
 
 function generateHeatmapUsingIndex(data) {
-    // data = {"tweets":{
-    //          "counts":[{"count":17011,"loc":[-107.75,42.75]},{"count":214831,"loc":[-75.25,42.75]},{"count":53548,"loc":[-107.75,32.25]},{"count":79089,"loc":[-75.25,32.25]}],
-    //          "latpieces":2,
-    //          "longpieces":2,
-    //          "win":[[-124,27],[-59,48]],"zoom":3}
-    //        }
+    /*
+     data = {win: [
+     [-124, 27],
+     [-59, 48]
+     ],
+     zoom_level: 3
+     }
+     */
     var busy = true;
     var start = new Date().getTime();
     $.ajax({
                 url: "/rectWithIndex",
                 type: "POST",
                 dataType: "json",
-                data: data,
+                contentType: 'application/json',
+                data: JSON.stringify(data),
                 success: function (data) {
+
+                    // data = {"tweets":{
+                    //          "counts":[{"count":17011,"loc":[-107.75,42.75]},{"count":214831,"loc":[-75.25,42.75]},{"count":53548,"loc":[-107.75,32.25]},{"count":79089,"loc":[-75.25,32.25]}],
+                    //          "latpieces":2,
+                    //          "longpieces":2,
+                    //          "win":[[-124,27],[-59,48]],"zoom":3}
+                    //        }
 
                     // data = {tweets: []}
 
@@ -252,14 +274,18 @@ function generateHeatmapUsingIndex(data) {
                      Log('Server took ' + (servertime).toFixed(2) + " milli seconds", false, false)*/
 
                     // var dataSet = [];
-                    // heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
-                    var count = 0;
+                    try {
+                        heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
+                    }
+                    catch (e) {
+                    }
+                    var aggregateCount = 0;
                     var tweets = data.tweets.counts;
                     for (var i = 0; i < tweets.length; i++) {
                         var tweet = tweets[i];
 
                         heatmap.addDataPoint(tweet.loc[1], tweet.loc[0], tweet.count);
-                        count += tweet.count;
+                        aggregateCount += tweet.count;
 
                         if (D) {
                             // Mark all the points
@@ -285,7 +311,7 @@ function generateHeatmapUsingIndex(data) {
                     }
                     // heatmap.setDataSet(dataSet);
                     console.log("success", data);
-                    Log('Heatmap complete. Found ' + count + " tweets in this area!", false, false)
+                    Log('Heatmap complete for zoom ' + data.zoom_level + '. Found ' + aggregateCount + " tweets in this area. Actually plotted " + tweets.length + "", true, true)
 
                     // remove the rectangle
                     // rectangle.setMap(null);
@@ -419,6 +445,8 @@ $(function () {
     }
 });
 
+google.maps.event.addDomListener(window, 'load', initialize);
+
 </script>
 
 <style>
@@ -444,7 +472,7 @@ $(function () {
     }
 </style>
 
-<body onload="initialize()">
+<body>
 
 <!-- <h1 style="text-align: center">Tweets HeatMap</h1> -->
 
@@ -494,7 +522,7 @@ $(function () {
 
             <div class="checkbox margin15">
                 <label>
-                    <input type="checkbox" id="precisetoggle"> Precise (Don't use indexed data)
+                    <input type="checkbox" checked="checked" id="precisetoggle"> Precise (Don't use indexed data)
                 </label>
             </div>
 

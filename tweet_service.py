@@ -182,17 +182,17 @@ def create_viz_index(win):
         print('Zoom: {0}. Time taken: {1}s'.format(current_zoom, end))
         print('===============================================')
     db.vizindex.create_index([("counts.loc", GEO2D)])
-    return res
+    return True
 
 
-@app.route('/tweetsWithIndex', methods=['GET', 'POST'])
-def tweets_with_index():
+@app.route('/createIndex', methods=['GET', 'POST'])
+def create_index():
     """
-    Creates an index
+    Creates an index for the given window
     :return:
     """
-    log('Received req: {0}'.format(request.form))
-    # res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)})
+    log("Create Index: Received req: {0}".format(request.form))
+    res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)})
     return "Success!"
 
 
@@ -200,14 +200,19 @@ def tweets_with_index():
 def rect_with_index():
     """
     Retrieves data from an index
+    Request's ContentType should be application/json: {u'win': [[-124, 27], [-59, 48]], u'zoom_level': 3}
     :return:
+    data = {"tweets":{
+       "counts":[{"count":17011,"loc":[-107.75,42.75]},{"count":214831,"loc":[-75.25,42.75]},{"count":53548,"loc":[-107.75,32.25]},{"count":79089,"loc":[-75 25,32.25]}],
+       "latpieces":2,
+       "longpieces":2,
+       "win":[[-124,27],[-59,48]],"zoom":3}
+    }
     """
-    log('Received req: {0}'.format(request.form))
-    # res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)})
-    cursor = db.vizindex.find({"win": [[-124, 27], [-59, 48]], "zoom": 3}, {"_id": 0, "counts.dbtime": 0})
-    tweets = cursor.next()
-    # for tweet in cursor:
-    #     tweets.append(json.dumps(tweet))
+    log('Query with Index: Received req: {0}'.format(request.json))
+    cursor = db.vizindex.find({"win": request.json['win'], "zoom": request.json['zoom_level']},
+                              {"_id": 0, "counts.dbtime": 0})
+    tweets = cursor.next()  # There will be only one entry for each {zoom, window} combination
     return jsonify({"tweets": tweets})
 
 
