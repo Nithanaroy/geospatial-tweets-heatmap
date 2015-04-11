@@ -212,8 +212,11 @@ def rect_with_index():
     log('Query with Index: Received req: {0}'.format(request.json))
     cursor = db.vizindex.find({"win": request.json['win'], "zoom": request.json['zoom_level']},
                               {"_id": 0, "counts.dbtime": 0})
-    tweets = cursor.next()  # There will be only one entry for each {zoom, window} combination
-    return jsonify({"tweets": tweets})
+    if cursor.count() > 0:
+        tweets = cursor.next()  # There will be only one entry for each {zoom, window} combination
+        return jsonify({"tweets": tweets})
+    else:
+        return jsonify({"tweets": None})
 
 
 @app.route('/rect', methods=['GET', 'POST'])

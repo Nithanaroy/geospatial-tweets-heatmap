@@ -274,6 +274,9 @@ function generateHeatmapUsingIndex(data) {
                      Log('Server took ' + (servertime).toFixed(2) + " milli seconds", false, false)*/
 
                     // var dataSet = [];
+                    if(!data.tweets)
+                        Log('Index not found for this zoom level. Previous map retained.', true, true)
+
                     try {
                         heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
                     }
@@ -294,7 +297,7 @@ function generateHeatmapUsingIndex(data) {
                                 map: map,
                                 title: 'Count ' + tweet.count,
                                 info: new google.maps.InfoWindow({
-                                    content: 'Count ' + tweet.count
+                                    content: '<strong>Count:</strong> ' + tweet.count + '<br /><strong>Zoom:</strong> ' + data.tweets.zoom
                                 })
                             });
 
@@ -311,7 +314,7 @@ function generateHeatmapUsingIndex(data) {
                     }
                     // heatmap.setDataSet(dataSet);
                     console.log("success", data);
-                    Log('Heatmap complete for zoom ' + data.zoom_level + '. Found ' + aggregateCount + " tweets in this area. Actually plotted " + tweets.length + "", true, true)
+                    Log('Heatmap complete for zoom ' + data.tweets.zoom + '.<br />Found ' + aggregateCount + " tweets in this area.<br /> Actually plotted " + tweets.length + "", true, true)
 
                     // remove the rectangle
                     // rectangle.setMap(null);
@@ -492,7 +495,7 @@ google.maps.event.addDomListener(window, 'load', initialize);
             <div class="panel panel-default margin15">
                 <div class="panel-heading" data-toggle="collapse" data-target="#collapseExample" aria-expanded="true"
                      aria-controls="collapseExample" style="cursor: pointer">
-                    <h3 class="panel-title">Add new data</h3>
+                    <h3 class="panel-title">Add your custom data (Coming soon)</h3>
                 </div>
                 <div class="panel-body collapse" id="collapseExample">
                     <form id="uploadForm" action="/upload" method=post enctype=multipart/form-data>
@@ -515,12 +518,12 @@ google.maps.event.addDomListener(window, 'load', initialize);
                                    target="_blank">(sample file)</a>
                             </p>
                         </div>
-                        <button type="submit" id="uploadSubmitBtn" class="btn btn-default">Upload & Insert</button>
+                        <button type="submit" id="uploadSubmitBtn" class="btn btn-default" disabled>Upload & Insert</button>
                     </form>
                 </div>
             </div>
 
-            <div class="checkbox margin15">
+            <div class="checkbox margin15 hide">
                 <label>
                     <input type="checkbox" checked="checked" id="precisetoggle"> Precise (Don't use indexed data)
                 </label>
