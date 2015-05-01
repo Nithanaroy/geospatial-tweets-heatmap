@@ -166,7 +166,8 @@ def create_viz_index(win, zoom_levels=None):
     zoom_split = {3: {"longpieces": 2, "latpieces": 2}, 4: {"longpieces": 4, "latpieces": 4},
                   5: {"longpieces": 8, "latpieces": 8}, 6: {"longpieces": 16, "latpieces": 16},
                   7: {"longpieces": 32, "latpieces": 32}, 8: {"longpieces": 64, "latpieces": 64},
-                  9: {"longpieces": 128, "latpieces": 128}}
+                  9: {"longpieces": 128, "latpieces": 128}, 10: {"longpieces": 256, "latpieces": 256},
+                  11: {"longpieces": 512, "latpieces": 512}}
 
     if zoom_levels is None:
         zoom_levels = zoom_split.keys()
@@ -200,7 +201,8 @@ def create_index():
     :return:
     """
     log("Create Index: Received req: {0}".format(request.form))
-    res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)}, [int(i) for i in request.form['zoom']])
+    # res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)}, [int(i) for i in request.form['zoom']])
+    res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)}, [int(request.form['zoom'])])
     return "Success!"
 
 
