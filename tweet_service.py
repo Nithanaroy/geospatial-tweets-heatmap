@@ -115,20 +115,18 @@ def fetch_environment_variable(key, default=None):
 
 
 def create_index_for_row(box, i, latpieces, latstep, longpieces, longstep, nw, point, res):
-    start = time.clock()
-    for j in range(1, longpieces + 1):
-        current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
-                          point(nw.long + longstep, nw.lat - latstep))
-        dbrecords = fetch_records(
-            [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
-        res.append(
-            {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
-             'count': dbrecords['tweets'],
-             'dbtime': dbrecords['time']})
-        nw = point(nw.long + longstep, nw.lat)
-    print("{3}: row {0} of {1}. Took {2}s".format(i, latpieces, time.clock() - start,
-                                                  datetime.datetime.fromtimestamp(time.time()).strftime(
-                                                      '%Y-%m-%d %H:%M:%S')))
+    current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
+                      point(nw.long + longstep, nw.lat - latstep))
+    dbrecords = fetch_records(
+        [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
+    res.append(
+        {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
+         'count': dbrecords['tweets'],
+         'dbtime': dbrecords['time']})
+    if i % 100 == 0:
+        print("{2}: row {0} of {1}.".format(i, latpieces,
+                                            datetime.datetime.fromtimestamp(time.time()).strftime(
+                                                '%Y-%m-%d %H:%M:%S')))
 
 
 def aggregate_tweets(current_zoom, latpieces, longpieces, win):
@@ -156,9 +154,17 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
 
     nw_copy = nw1
     top_left_pts = []
+
+    # for i in range(1, latpieces + 1):
+    # for j in range(1, longpieces + 1):
+    # nw = point(nw.long + longstep, nw.lat)
+    # nw = point(nw.long - longpieces * longstep, nw.lat - latstep)
+
     for i in range(1, latpieces + 1):
-        nw_copy = point(nw_copy.long, nw_copy.lat - latstep)
-        top_left_pts.append(nw_copy)
+        for j in range(1, longpieces + 1):
+            top_left_pts.append(nw_copy)
+            nw_copy = point(nw_copy.long + longstep, nw_copy.lat)
+        nw_copy = point(nw_copy.long - longpieces * longstep, nw_copy.lat - latstep)
 
     num_cores = multiprocessing.cpu_count()
     Parallel(n_jobs=num_cores)(
