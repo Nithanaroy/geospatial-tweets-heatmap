@@ -7,6 +7,9 @@ import os
 from flask import Flask, request
 import re, time, json, pymongo
 from collections import namedtuple
+from joblib import Parallel, delayed
+import multiprocessing
+import datetime
 
 
 DB = 'tstream'
@@ -111,6 +114,23 @@ def fetch_environment_variable(key, default=None):
         return value
 
 
+def create_index_for_row(box, i, latpieces, latstep, longpieces, longstep, nw, point, res):
+    start = time.clock()
+    for j in range(1, longpieces + 1):
+        current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
+                          point(nw.long + longstep, nw.lat - latstep))
+        dbrecords = fetch_records(
+            [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
+        res.append(
+            {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
+             'count': dbrecords['tweets'],
+             'dbtime': dbrecords['time']})
+        nw = point(nw.long + longstep, nw.lat)
+    print("{3}: row {0} of {1}. Took {2}s".format(i, latpieces, time.clock() - start,
+                                                  datetime.datetime.fromtimestamp(time.time()).strftime(
+                                                      '%Y-%m-%d %H:%M:%S')))
+
+
 def aggregate_tweets(current_zoom, latpieces, longpieces, win):
     """
     The core method used for aggregating the tweets in a given window
@@ -128,26 +148,24 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
     box = namedtuple('box', 'sw ne nw se')
     ne = point(float(win["ne"][0]), float(win["ne"][1]))
     sw = point(float(win["sw"][0]), float(win['sw'][1]))
-    nw = point(float(win['sw'][0]), float(win['ne'][1]))  # long from SW and lat from NE
+    nw1 = point(float(win['sw'][0]), float(win['ne'][1]))  # long from SW and lat from NE
     se = point(float(win['ne'][0]), float(win['sw'][1]))  # long from NE and lat from SW
-    longstep = abs(ne.long - nw.long) / longpieces
+    longstep = abs(ne.long - nw1.long) / longpieces
     latstep = abs(ne.lat - se.lat) / latpieces
     res = []
 
+    nw_copy = nw1
+    top_left_pts = []
     for i in range(1, latpieces + 1):
-        start = time.clock()
-        for j in range(1, longpieces + 1):
-            current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
-                              point(nw.long + longstep, nw.lat - latstep))
-            dbrecords = fetch_records(
-                [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
-            res.append(
-                {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
-                 'count': dbrecords['tweets'],
-                 'dbtime': dbrecords['time']})
-            nw = point(nw.long + longstep, nw.lat)
-        nw = point(nw.long - longpieces * longstep, nw.lat - latstep)
-        print("row {0} of {1}. Took {2}s".format(i, latpieces, time.clock() - start))
+        nw_copy = point(nw_copy.long, nw_copy.lat - latstep)
+        top_left_pts.append(nw_copy)
+
+    num_cores = multiprocessing.cpu_count()
+    Parallel(n_jobs=num_cores)(
+        delayed(create_index_for_row)(box, i, latpieces, latstep, longpieces, longstep, nw, point, res) for i, nw in
+        enumerate(top_left_pts))
+    # for i, nw in enumerate(top_left_pts):
+    # create_index_for_row(box, i, latpieces, latstep, longpieces, longstep, nw, point, res)
     log("Completed for zoom level " + str(current_zoom))
     return res
 
