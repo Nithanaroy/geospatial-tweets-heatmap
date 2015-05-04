@@ -10,6 +10,7 @@ from collections import namedtuple
 from joblib import Parallel, delayed
 import multiprocessing
 import datetime
+from multiprocessing.pool import ThreadPool
 
 
 DB = 'tstream'
@@ -114,19 +115,27 @@ def fetch_environment_variable(key, default=None):
         return value
 
 
-def create_index_for_row(box, i, latpieces, latstep, longpieces, longstep, nw, point, res):
-    current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
-                      point(nw.long + longstep, nw.lat - latstep))
-    dbrecords = fetch_records(
-        [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
-    res.append(
-        {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
-         'count': dbrecords['tweets'],
-         'dbtime': dbrecords['time']})
-    if i % 100 == 0:
-        print("{2}: row {0} of {1}.".format(i, latpieces,
-                                            datetime.datetime.fromtimestamp(time.time()).strftime(
-                                                '%Y-%m-%d %H:%M:%S')))
+def create_index_for_row(box, tid, latpieces, latstep, longpieces, longstep, nws, point, res):
+    total = len(nws)
+    for i, nw in enumerate(nws):
+        current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
+                          point(nw.long + longstep, nw.lat - latstep))
+        dbrecords = fetch_records(
+            [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
+        res.append(
+            {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
+             'count': dbrecords['tweets'],
+             'dbtime': dbrecords['time']})
+        if i > 99 and i % 100 == 0:
+            print("tid {3}: box {0} of {1} @ {2}".format(i, total,
+                                                         datetime.datetime.fromtimestamp(time.time()).strftime(
+                                                             '%H:%M:%S'), tid))
+
+
+def split_list(alist, wanted_parts=1):
+    length = len(alist)
+    return [alist[i * length // wanted_parts: (i + 1) * length // wanted_parts]
+            for i in range(wanted_parts)]
 
 
 def aggregate_tweets(current_zoom, latpieces, longpieces, win):
@@ -146,19 +155,14 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
     box = namedtuple('box', 'sw ne nw se')
     ne = point(float(win["ne"][0]), float(win["ne"][1]))
     sw = point(float(win["sw"][0]), float(win['sw'][1]))
-    nw1 = point(float(win['sw'][0]), float(win['ne'][1]))  # long from SW and lat from NE
+    nw = point(float(win['sw'][0]), float(win['ne'][1]))  # long from SW and lat from NE
     se = point(float(win['ne'][0]), float(win['sw'][1]))  # long from NE and lat from SW
-    longstep = abs(ne.long - nw1.long) / longpieces
+    longstep = abs(ne.long - nw.long) / longpieces
     latstep = abs(ne.lat - se.lat) / latpieces
     res = []
 
-    nw_copy = nw1
+    nw_copy = nw
     top_left_pts = []
-
-    # for i in range(1, latpieces + 1):
-    # for j in range(1, longpieces + 1):
-    # nw = point(nw.long + longstep, nw.lat)
-    # nw = point(nw.long - longpieces * longstep, nw.lat - latstep)
 
     for i in range(1, latpieces + 1):
         for j in range(1, longpieces + 1):
@@ -167,11 +171,16 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
         nw_copy = point(nw_copy.long - longpieces * longstep, nw_copy.lat - latstep)
 
     num_cores = multiprocessing.cpu_count()
-    Parallel(n_jobs=num_cores)(
-        delayed(create_index_for_row)(box, i, latpieces, latstep, longpieces, longstep, nw, point, res) for i, nw in
-        enumerate(top_left_pts))
-    # for i, nw in enumerate(top_left_pts):
-    # create_index_for_row(box, i, latpieces, latstep, longpieces, longstep, nw, point, res)
+    top_left_pts_split = split_list(top_left_pts, num_cores)
+    pool = ThreadPool(processes=num_cores)
+    for i in range(0, num_cores):
+        pool.apply_async(create_index_for_row,
+                         (box, i, latpieces, latstep, longpieces, longstep, top_left_pts_split[i], point, res))
+    # Parallel(n_jobs=num_cores)(
+    # delayed(create_index_for_row)(box, i, latpieces, latstep, longpieces, longstep, nw, point, res) for i, nw in
+    #     enumerate(top_left_pts))
+    pool.close()
+    pool.join()
     log("Completed for zoom level " + str(current_zoom))
     return res
 
@@ -247,7 +256,7 @@ def rect_with_index():
     # cursor = db.vizindex.find({"win": request.json['win'], "zoom": request.json['zoom_level']},
     # {"_id": 0, "counts.dbtime": 0})
 
-    query = {"win": request.json['win'], "zoom": 8, "loc": {"$geoWithin": {"$box": request.json['bounds']}},
+    query = {"win": request.json['win'], "zoom": 10, "loc": {"$geoWithin": {"$box": request.json['bounds']}},
              "count": {"$gt": 0}}
     log('Query to DB: {0}'.format(query))
     cursor = db.vizindex.find(query, {"_id": 0, "dbtime": 0, "latpieces": 0, "longpieces": 0, "win": 0, "zoom": 0})
