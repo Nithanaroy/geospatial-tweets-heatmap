@@ -7,6 +7,10 @@ import os
 from flask import Flask, request
 import re, time, json, pymongo
 from collections import namedtuple
+from joblib import Parallel, delayed
+import multiprocessing
+import datetime
+from multiprocessing.pool import ThreadPool
 
 
 DB = 'tstream'
@@ -111,6 +115,29 @@ def fetch_environment_variable(key, default=None):
         return value
 
 
+def create_index_for_row(box, tid, latpieces, latstep, longpieces, longstep, nws, point, res):
+    total = len(nws)
+    for i, nw in enumerate(nws):
+        current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
+                          point(nw.long + longstep, nw.lat - latstep))
+        dbrecords = fetch_records(
+            [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
+        res.append(
+            {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
+             'count': dbrecords['tweets'],
+             'dbtime': dbrecords['time']})
+        if i > 99 and i % 100 == 0:
+            print("tid {3}: box {0} of {1} @ {2}".format(i, total,
+                                                         datetime.datetime.fromtimestamp(time.time()).strftime(
+                                                             '%H:%M:%S'), tid))
+
+
+def split_list(alist, wanted_parts=1):
+    length = len(alist)
+    return [alist[i * length // wanted_parts: (i + 1) * length // wanted_parts]
+            for i in range(wanted_parts)]
+
+
 def aggregate_tweets(current_zoom, latpieces, longpieces, win):
     """
     The core method used for aggregating the tweets in a given window
@@ -134,29 +161,36 @@ def aggregate_tweets(current_zoom, latpieces, longpieces, win):
     latstep = abs(ne.lat - se.lat) / latpieces
     res = []
 
+    nw_copy = nw
+    top_left_pts = []
+
     for i in range(1, latpieces + 1):
-        start = time.clock()
         for j in range(1, longpieces + 1):
-            current_win = box(point(nw.long, nw.lat - latstep), point(nw.long + longstep, nw.lat), nw,
-                              point(nw.long + longstep, nw.lat - latstep))
-            dbrecords = fetch_records(
-                [[current_win.sw.long, current_win.sw.lat], [current_win.ne.long, current_win.ne.lat]], True)
-            res.append(
-                {'loc': [nw.long + longstep / 2, nw.lat - latstep / 2],
-                 'count': dbrecords['tweets'],
-                 'dbtime': dbrecords['time']})
-            nw = point(nw.long + longstep, nw.lat)
-        nw = point(nw.long - longpieces * longstep, nw.lat - latstep)
-        print("row {0} of {1}. Took {2}s".format(i, latpieces, time.clock() - start))
+            top_left_pts.append(nw_copy)
+            nw_copy = point(nw_copy.long + longstep, nw_copy.lat)
+        nw_copy = point(nw_copy.long - longpieces * longstep, nw_copy.lat - latstep)
+
+    num_cores = multiprocessing.cpu_count()
+    top_left_pts_split = split_list(top_left_pts, num_cores)
+    pool = ThreadPool(processes=num_cores)
+    for i in range(0, num_cores):
+        pool.apply_async(create_index_for_row,
+                         (box, i, latpieces, latstep, longpieces, longstep, top_left_pts_split[i], point, res))
+    # Parallel(n_jobs=num_cores)(
+    # delayed(create_index_for_row)(box, i, latpieces, latstep, longpieces, longstep, nw, point, res) for i, nw in
+    #     enumerate(top_left_pts))
+    pool.close()
+    pool.join()
     log("Completed for zoom level " + str(current_zoom))
     return res
 
 
-def create_viz_index(win):
+def create_viz_index(win, zoom_levels=None):
     """
     Creates a visualization index for the given window. The index is an aggreagation of tweets for each zoom level
     :param win: Southwest and Northeast co-ordinates of the query window.
     It is a dict type in this format {"sw": (long,lat), "ne": (long,lat)}
+    :param zoom_levels: Zoom levels to generate the index for. If None, all levels are considered => [3, 6, 9]
     :return: true if the index is successfully created, else false
     """
 
@@ -164,9 +198,14 @@ def create_viz_index(win):
     # Google Maps Zoom Level: valid range [0 to 19]. 0 is the entire world
     zoom_split = {3: {"longpieces": 2, "latpieces": 2}, 4: {"longpieces": 4, "latpieces": 4},
                   5: {"longpieces": 8, "latpieces": 8}, 6: {"longpieces": 16, "latpieces": 16},
-                  7: {"longpieces": 32, "latpieces": 32}, 8: {"longpieces": 64, "latpieces": 64}}
+                  7: {"longpieces": 32, "latpieces": 32}, 8: {"longpieces": 64, "latpieces": 64},
+                  9: {"longpieces": 128, "latpieces": 128}, 10: {"longpieces": 256, "latpieces": 256},
+                  11: {"longpieces": 512, "latpieces": 512}}
 
-    for current_zoom in zoom_split.keys():
+    if zoom_levels is None:
+        zoom_levels = zoom_split.keys()
+
+    for current_zoom in zoom_levels:
         start = time.clock()
         longpieces = zoom_split[current_zoom]['longpieces']  # number of partitions at this zoom level along a latitude
         latpieces = zoom_split[current_zoom]['latpieces']  # number of partitions at this zoom level along a longitude
@@ -175,13 +214,16 @@ def create_viz_index(win):
         res = aggregate_tweets(current_zoom, latpieces, longpieces, win)
 
         # Save to MongoDB into vizindex collection
-        db.vizindex.insert(
-            {"win": [[float(win["sw"][0]), float(win['sw'][1])], [float(win["ne"][0]), float(win["ne"][1])]],
-             "zoom": current_zoom, "longpieces": longpieces, "latpieces": latpieces, "counts": res})
+        for tweet in res:
+            # Merge this info along with the tweet data using update()
+            tweet.update(
+                {"win": [[float(win["sw"][0]), float(win['sw'][1])], [float(win["ne"][0]), float(win["ne"][1])]],
+                 "zoom": current_zoom, "longpieces": longpieces, "latpieces": latpieces})
+            db.vizindex.insert(tweet)
         end = time.clock() - start
         print('Zoom: {0}. Time taken: {1}s'.format(current_zoom, end))
         print('===============================================')
-    db.vizindex.create_index([("counts.loc", GEO2D)])
+    db.vizindex.create_index([("loc", GEO2D)])
     return True
 
 
@@ -192,7 +234,8 @@ def create_index():
     :return:
     """
     log("Create Index: Received req: {0}".format(request.form))
-    res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)})
+    # res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)}, [int(i) for i in request.form['zoom']])
+    res = create_viz_index({"sw": (-124, 27), "ne": (-59, 48)}, [int(request.form['zoom'])])
     return "Success!"
 
 
@@ -210,13 +253,23 @@ def rect_with_index():
     }
     """
     log('Query with Index: Received req: {0}'.format(request.json))
-    cursor = db.vizindex.find({"win": request.json['win'], "zoom": request.json['zoom_level']},
-                              {"_id": 0, "counts.dbtime": 0})
-    if cursor.count() > 0:
-        tweets = cursor.next()  # There will be only one entry for each {zoom, window} combination
-        return jsonify({"tweets": tweets})
-    else:
-        return jsonify({"tweets": None})
+    # cursor = db.vizindex.find({"win": request.json['win'], "zoom": request.json['zoom_level']},
+    # {"_id": 0, "counts.dbtime": 0})
+
+    query = {"win": request.json['win'], "zoom": 10, "loc": {"$geoWithin": {"$box": request.json['bounds']}},
+             "count": {"$gt": 0}}
+    log('Query to DB: {0}'.format(query))
+    cursor = db.vizindex.find(query, {"_id": 0, "dbtime": 0, "latpieces": 0, "longpieces": 0, "win": 0, "zoom": 0})
+    # if cursor.count() > 0:
+    # tweets = cursor.next()  # There will be only one entry for each {zoom, window} combination
+    # return jsonify({"tweets": tweets})
+    # else:
+    # return jsonify({"tweets": None})
+
+    tweets = []
+    for tweet in cursor:
+        tweets.append(tweet)
+    return jsonify({"tweets": tweets})
 
 
 @app.route('/rect', methods=['GET', 'POST'])

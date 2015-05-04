@@ -23,7 +23,7 @@
 
 <script type="text/javascript">
 
-var map, pointarray, heatmap, D = true, preciseMode = true;
+var map, pointarray, heatmap, D = false, preciseMode = true;
 
 function initialize() {
     var config = {
@@ -34,8 +34,8 @@ function initialize() {
     };
 
     var myOptions = {
-        zoom: 3,
-        center: new google.maps.LatLng(37.774546, -122.433523),
+        zoom: 4,
+        center: new google.maps.LatLng(37.705042225002245, -73.6102808125),
         mapTypeId: google.maps.MapTypeId.ROADMAP,
         disableDoubleClickZoom: true // This event is used to remove a rectangle / query window
     };
@@ -119,6 +119,7 @@ function initialize() {
 
     });
 
+    // mark indexed area on the map
     var rectangle = new google.maps.Rectangle({
         strokeColor: '#000000',
         strokeOpacity: 0.8,
@@ -131,18 +132,33 @@ function initialize() {
                 new google.maps.LatLng(48, -59))
     });
 
-    google.maps.event.addListener(map, 'zoom_changed', function () {
-        generateHeatmapUsingIndex({win: [
-            [-124, 27],
-            [-59, 48]
-        ], zoom_level: map.getZoom()});
+    google.maps.event.addListener(map, 'dragend', function () {
+        if (!$("#skipservertoggle").is(":checked"))
+            callGenerateHeatmapUsingIndex();
     });
 
-    google.maps.event.addListener(map, 'tilesloaded', function () {
-        generateHeatmapUsingIndex({win: [
+    google.maps.event.addListener(map, 'zoom_changed', function () {
+        callGenerateHeatmapUsingIndex();
+    });
+
+
+    var idleListener = google.maps.event.addListener(map, 'idle', function () {
+        callGenerateHeatmapUsingIndex();
+        google.maps.event.removeListener(idleListener);
+    });
+}
+
+function callGenerateHeatmapUsingIndex() {
+    generateHeatmapUsingIndex({
+        win: [
             [-124, 27],
             [-59, 48]
-        ], zoom_level: map.getZoom()});
+        ],
+        zoom_level: map.getZoom(),
+        bounds: [
+            [map.getBounds().getSouthWest().lng(), map.getBounds().getSouthWest().lat()],
+            [map.getBounds().getNorthEast().lng(), map.getBounds().getNorthEast().lat()]
+        ]
     });
 }
 
@@ -246,9 +262,11 @@ function generateHeatmapUsingIndex(data) {
      [-124, 27],
      [-59, 48]
      ],
-     zoom_level: 3
+     zoom_level: 3,
+     bounds: [[-100, 20], [-54, 40]]
      }
      */
+    Log("Request sent. Drawing heatmap. Please wait.")
     var busy = true;
     var start = new Date().getTime();
     $.ajax({
@@ -274,7 +292,7 @@ function generateHeatmapUsingIndex(data) {
                      Log('Server took ' + (servertime).toFixed(2) + " milli seconds", false, false)*/
 
                     // var dataSet = [];
-                    if (!data.tweets)
+                    if (data.tweets === null)
                         Log('Index not found for this zoom level. Previous map retained.', true, true)
 
                     try {
@@ -283,7 +301,7 @@ function generateHeatmapUsingIndex(data) {
                     catch (e) {
                     }
                     var aggregateCount = 0;
-                    var tweets = data.tweets.counts;
+                    var tweets = data.tweets;
                     for (var i = 0; i < tweets.length; i++) {
                         var tweet = tweets[i];
 
@@ -313,8 +331,8 @@ function generateHeatmapUsingIndex(data) {
                         // dataSet.push([tweet.loc[1], tweet.loc[0]]);
                     }
                     // heatmap.setDataSet(dataSet);
-                    console.log("success", data);
-                    Log('Heatmap complete for zoom ' + data.tweets.zoom + '.<br />Found ' + aggregateCount + " tweets in this area.<br /> Actually plotted " + tweets.length + "", true, true)
+                    console.log("Tweets from GenerateHeatMapUsingIndex", data);
+                    Log('Heatmap complete for zoom level ' + map.getZoom() + '.<br />Found ' + aggregateCount + " tweets in this area.<br /> Actually plotted " + tweets.length + "", false, true)
 
                     // remove the rectangle
                     // rectangle.setMap(null);
@@ -429,6 +447,10 @@ $(function () {
         preciseMode = $(this).is(":checked")
     });
 
+    $("#repaintButton").click(function () {
+        callGenerateHeatmapUsingIndex();
+    });
+
     function updateProgressbar(progress) {
         $('.progress .progress-bar').css('width', progress + '%').text(progress + "%");
     }
@@ -451,7 +473,7 @@ $(function () {
 
     $("#map_canvas, #log_container").css({height: $(document).height()})
 
-    $(window).on('resize', function() {
+    $(window).on('resize', function () {
         $("#map_canvas, #log_container").css({height: $(document).height()})
     });
     initialize();
@@ -581,6 +603,15 @@ $(function () {
                             data)
                         </label>
                     </div>
+
+                    <div class="checkbox margin15">
+                        <label>
+                            <input type="checkbox" id="skipservertoggle"> Stop server calls while panning
+                        </label>
+                    </div>
+
+                    <a class="btn btn-default margin15" href="#" role="button" id="repaintButton">Repaint
+                        Heatmap</a>
 
                     <h4 class="text-center top25">Updates</h4>
                     <hr/>
