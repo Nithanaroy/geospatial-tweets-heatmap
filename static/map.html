@@ -165,12 +165,14 @@ function callGenerateHeatmapUsingIndex() {
 function getQueryWindowBounds(rectangle) {
     var bounds = rectangle.getBounds();
 
-    var logStr = "A : [long: " + (bounds.va.j).toFixed(2) + ", lat: " + (bounds.Da.j).toFixed(2) + "], B: [long: "
-            + (bounds.va.k).toFixed(2) + ", lat: " + (bounds.Da.k).toFixed(2) + "]";
+    var logStr = "A : [long: " + (bounds.getSouthWest().lng()).toFixed(2) + ", lat: " + (bounds.getSouthWest().lat()).toFixed(2) + "], " +
+            "B: [long: "
+            + (bounds.getNorthEast().lng()).toFixed(2) + ", lat: " + (bounds.getNorthEast().lat()).toFixed(2) + "]";
     Log("Generating heatmap for: " + logStr, true);
     console.log(logStr)
 
-    var data = { ALong: bounds.va.j, ALat: bounds.Da.j, BLong: bounds.va.k, BLat: bounds.Da.k}
+    var data = { ALong: bounds.getSouthWest().lng(), ALat: bounds.getSouthWest().lat(),
+        BLong: bounds.getNorthEast().lng(), BLat: bounds.getNorthEast().lat()}
     return data;
 }
 
@@ -291,6 +293,8 @@ function generateHeatmapUsingIndex(data) {
                      Log('Database took ' + (dbtime).toFixed(2) + " milli seconds", false, false)
                      Log('Server took ' + (servertime).toFixed(2) + " milli seconds", false, false)*/
 
+                    var start = new Date().getTime();
+
                     // var dataSet = [];
                     if (data.tweets === null)
                         Log('Index not found for this zoom level. Previous map retained.', true, true)
@@ -332,7 +336,9 @@ function generateHeatmapUsingIndex(data) {
                     }
                     // heatmap.setDataSet(dataSet);
                     console.log("Tweets from GenerateHeatMapUsingIndex", data);
-                    Log('Heatmap complete for zoom level ' + map.getZoom() + '.<br />Found ' + aggregateCount + " tweets in this area.<br /> Actually plotted " + tweets.length + "", false, true)
+                    var uitime = new Date().getTime() - start;
+                    Log('Heatmap complete for zoom level ' + map.getZoom() + '.<br />Found ' + aggregateCount +
+                            " tweets in this area.<br /> Actually plotted " + tweets.length + ". Took " + uitime.toFixed(2) + 'milli seconds', false, true)
 
                     // remove the rectangle
                     // rectangle.setMap(null);
