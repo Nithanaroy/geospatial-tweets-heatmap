@@ -7,8 +7,8 @@
         src="https://maps.googleapis.com/maps/api/js?v=3.exp&signed_in=false&sensor=false&libraries=visualization,drawing"></script>
 <script type="text/javascript" src="jquery-1.11.2.min.js"></script>
 <script type="text/javascript" src="jquery.eventsource.js"></script>
-<script type="text/javascript" src="heatmap.js"></script>
-<script type="text/javascript" src="heatmap-gmaps.js"></script>
+<!-- <script type="text/javascript" src="heatmap.js"></script>
+<script type="text/javascript" src="heatmap-gmaps.js"></script>-->
 <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.min.js"></script>
 
@@ -27,9 +27,9 @@ var map, pointarray, heatmap, D = false, preciseMode = true;
 
 function initialize() {
     var config = {
-        "radius": 30,
+        "radius": 60,
         "visible": true,
-        "opacity": 60,
+        "opacity": 50,
         "gradient": { 0.45: "rgb(0,0,255)", 0.55: "rgb(0,255,255)", 0.65: "rgb(0,255,0)", 0.95: "yellow", 1.0: "rgb(255,0,0)" }
     };
 
@@ -41,7 +41,7 @@ function initialize() {
     };
 
     map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
-    heatmap = new HeatmapOverlay(map, config);
+    // heatmap = new HeatmapOverlay(map, config);
     google.maps.event.addListener(map, 'dblclick', function (event) {
         event.stop();
     });
@@ -230,14 +230,41 @@ function generateHeatmap(data) {
                     Log('Database took ' + (dbtime).toFixed(2) + " milli seconds", false, false)
                     Log('Server took ' + (servertime).toFixed(2) + " milli seconds", false, false)
 
+                    var pointArray = [];
+
                     // var dataSet = [];
                     // heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
                     for (var i = 0; i < data.tweets.length; i++) {
                         var tweet = JSON.parse(data.tweets[i]);
-                        heatmap.addDataPoint(tweet.loc[1], tweet.loc[0]);
+                        // heatmap.addDataPoint(tweet.loc[1], tweet.loc[0]);
                         // dataSet.push([tweet.loc[1], tweet.loc[0]]);
+                        pointArray.push(new google.maps.LatLng(tweet.loc[1], tweet.loc[0]));
                     }
                     // heatmap.setDataSet(dataSet);
+
+                    clearHeatMap();
+
+                    var heatmap = new google.maps.visualization.HeatmapLayer({
+                        data: pointArray,
+                        map: map,
+                        "radius": 60,
+                        "gradient": ['rgba(0, 255, 255, 0)',
+                            'rgba(0, 255, 255, 1)',
+                            'rgba(0, 191, 255, 1)',
+                            'rgba(0, 127, 255, 1)',
+                            'rgba(0, 63, 255, 1)',
+                            'rgba(0, 0, 255, 1)',
+                            'rgba(0, 0, 223, 1)',
+                            'rgba(0, 0, 191, 1)',
+                            'rgba(0, 0, 159, 1)',
+                            'rgba(0, 0, 127, 1)',
+                            'rgba(63, 0, 91, 1)',
+                            'rgba(127, 0, 63, 1)',
+                            'rgba(191, 0, 31, 1)',
+                            'rgba(255, 0, 0, 1)']
+                    });
+                    map.heatmap = heatmap; // custom property
+
                     console.log("success", data);
                     Log('Heatmap complete. Found ' + data.tweets.length + " tweets in this area!", false, false)
 
@@ -295,21 +322,24 @@ function generateHeatmapUsingIndex(data) {
 
                     var start = new Date().getTime();
 
+                    var pointArray = []
+
                     // var dataSet = [];
                     if (data.tweets === null)
                         Log('Index not found for this zoom level. Previous map retained.', true, true)
 
-                    try {
-                        heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
-                    }
-                    catch (e) {
-                    }
+                    /*try {
+                     heatmap.setDataSet({ max: -1, data: [] }); // clear existing data
+                     }
+                     catch (e) {
+                     }*/
                     var aggregateCount = 0;
                     var tweets = data.tweets;
                     for (var i = 0; i < tweets.length; i++) {
                         var tweet = tweets[i];
 
-                        heatmap.addDataPoint(tweet.loc[1], tweet.loc[0], tweet.count);
+                        // heatmap.addDataPoint(tweet.loc[1], tweet.loc[0], tweet.count);
+                        pointArray.push({location: new google.maps.LatLng(tweet.loc[1], tweet.loc[0]), weight: tweet.count});
                         aggregateCount += tweet.count;
 
                         if (D) {
@@ -335,6 +365,30 @@ function generateHeatmapUsingIndex(data) {
                         // dataSet.push([tweet.loc[1], tweet.loc[0]]);
                     }
                     // heatmap.setDataSet(dataSet);
+
+                    clearHeatMap();
+
+                    var heatmap = new google.maps.visualization.HeatmapLayer({
+                        data: pointArray,
+                        map: map,
+                        "radius": 60,
+                        "gradient": ['rgba(0, 255, 255, 0)',
+                            'rgba(0, 255, 255, 1)',
+                            'rgba(0, 191, 255, 1)',
+                            'rgba(0, 127, 255, 1)',
+                            'rgba(0, 63, 255, 1)',
+                            'rgba(0, 0, 255, 1)',
+                            'rgba(0, 0, 223, 1)',
+                            'rgba(0, 0, 191, 1)',
+                            'rgba(0, 0, 159, 1)',
+                            'rgba(0, 0, 127, 1)',
+                            'rgba(63, 0, 91, 1)',
+                            'rgba(127, 0, 63, 1)',
+                            'rgba(191, 0, 31, 1)',
+                            'rgba(255, 0, 0, 1)']
+                    });
+                    map.heatmap = heatmap; // custom property
+
                     console.log("Tweets from GenerateHeatMapUsingIndex", data);
                     var uitime = new Date().getTime() - start;
                     Log('Heatmap complete for zoom level ' + map.getZoom() + '.<br />Found ' + aggregateCount +
@@ -362,6 +416,10 @@ function handleBusyState(rectangle) {
     // rectangle.setMap(null); // Remove the rectangle
 }
 
+function clearHeatMap() {
+    if (map.heatmap)
+        map.heatmap.setMap(null);
+}
 
 /*
  google.maps.event.addListener(drawingManager, 'overlaycomplete', function (event) {
