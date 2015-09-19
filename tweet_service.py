@@ -7,6 +7,7 @@ import os
 from flask import Flask, request
 import re, time, json, pymongo
 from collections import namedtuple
+from joblib import Parallel, delayed
 import multiprocessing
 import datetime
 from multiprocessing.pool import ThreadPool
@@ -255,7 +256,7 @@ def rect_with_index():
     # cursor = db.vizindex.find({"win": request.json['win'], "zoom": request.json['zoom_level']},
     # {"_id": 0, "counts.dbtime": 0})
 
-    query = {"win": request.json['win'], "zoom": 11, "loc": {"$geoWithin": {"$box": request.json['bounds']}},
+    query = {"win": request.json['win'], "zoom": 4, "loc": {"$geoWithin": {"$box": request.json['bounds']}},
              "count": {"$gt": 0}}
     log('Query to DB: {0}'.format(query))
     cursor = db.vizindex.find(query, {"_id": 0, "dbtime": 0, "latpieces": 0, "longpieces": 0, "win": 0, "zoom": 0})
